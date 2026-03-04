@@ -1,0 +1,302 @@
+/* ============================================
+   AgriFlow — Cultivated Minimalism
+   Earthy mid-tones, muted saturation, warm feel
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
+:root {
+  /* Core palette — saturated muted mid-tones */
+  --moss: #4A6741;
+  --moss-light: #5E7D54;
+  --moss-faded: #6B8F6140;
+  --sage: #8A9A7B;
+  --sage-light: #A8B89C;
+  --sienna: #B5694D;
+  --sienna-light: #C9846A;
+  --sienna-faded: #B5694D20;
+  --harvest: #C4A35A;
+  --harvest-light: #D4B872;
+  --loam: #2B2D2B;
+  --loam-soft: #3D3F3D;
+  --parchment: #F2EDE4;
+  --parchment-deep: #E8E1D5;
+  --card: #FAFAF7;
+  --white: #FFFFFF;
+
+  /* Semantic tokens */
+  --bg-primary: var(--parchment);
+  --bg-card: var(--card);
+  --bg-dark: var(--loam);
+  --text-primary: var(--loam);
+  --text-secondary: #6B6D6B;
+  --text-inverse: var(--parchment);
+  --accent: var(--moss);
+  --accent-hover: var(--moss-light);
+  --accent-warm: var(--sienna);
+  --accent-warm-hover: var(--sienna-light);
+  --border: #D6D0C6;
+  --border-light: #E8E3DA;
+
+  /* Typography */
+  --font-display: 'DM Serif Display', Georgia, serif;
+  --font-body: 'DM Sans', -apple-system, sans-serif;
+
+  /* Spacing */
+  --sidebar-collapsed: 72px;
+  --sidebar-expanded: 252px;
+  --navbar-height: 64px;
+
+  /* Transitions */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --transition-fast: 0.2s var(--ease-out);
+  --transition-smooth: 0.35s var(--ease-out);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(43, 45, 43, 0.06);
+  --shadow-md: 0 4px 16px rgba(43, 45, 43, 0.08);
+  --shadow-lg: 0 8px 32px rgba(43, 45, 43, 0.1);
+  --shadow-float: 0 8px 40px rgba(43, 45, 43, 0.12), 0 2px 8px rgba(43, 45, 43, 0.06);
+}
+
+/* ---- Base Reset ---- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* ---- Utility Classes ---- */
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.text-moss {
+  color: var(--moss) !important;
+}
+
+.text-sienna {
+  color: var(--sienna) !important;
+}
+
+.text-sage {
+  color: var(--sage) !important;
+}
+
+.bg-parchment {
+  background-color: var(--parchment) !important;
+}
+
+.bg-card {
+  background-color: var(--card) !important;
+}
+
+/* ---- Button Overrides ---- */
+
+.btn-moss {
+  background-color: var(--moss);
+  border-color: var(--moss);
+  color: var(--white);
+  font-family: var(--font-body);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: all var(--transition-fast);
+}
+
+.btn-moss:hover,
+.btn-moss:focus {
+  background-color: var(--moss-light);
+  border-color: var(--moss-light);
+  color: var(--white);
+  box-shadow: 0 4px 12px var(--moss-faded);
+}
+
+.btn-sienna {
+  background-color: var(--sienna);
+  border-color: var(--sienna);
+  color: var(--white);
+  font-family: var(--font-body);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.btn-sienna:hover,
+.btn-sienna:focus {
+  background-color: var(--sienna-light);
+  border-color: var(--sienna-light);
+  color: var(--white);
+}
+
+.btn-outline-moss {
+  border: 1.5px solid var(--moss);
+  color: var(--moss);
+  background: transparent;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.btn-outline-moss:hover {
+  background-color: var(--moss);
+  color: var(--white);
+}
+
+/* ---- Form Overrides ---- */
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--sage);
+  box-shadow: 0 0 0 3px var(--moss-faded);
+}
+
+.form-control,
+.form-select {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background-color: var(--white);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-label {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+  letter-spacing: 0.02em;
+}
+
+/* ---- Card Overrides ---- */
+
+.card-agri {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-fast);
+}
+
+.card-agri:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* ---- Scrollbar ---- */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--sage);
+}
+
+/* ---- Animations ---- */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s var(--ease-out) both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s var(--ease-out) both;
+}
+
+.animate-delay-1 { animation-delay: 0.08s; }
+.animate-delay-2 { animation-delay: 0.16s; }
+.animate-delay-3 { animation-delay: 0.24s; }
+.animate-delay-4 { animation-delay: 0.32s; }
+.animate-delay-5 { animation-delay: 0.4s; }
+
+/* ---- Responsive ---- */
+
+@media (max-width: 767.98px) {
+  :root {
+    --navbar-height: 56px;
+    --sidebar-bottom-height: 64px;
+  }
+
+  body {
+    font-size: 14px;
+  }
+
+  h1 { font-size: 1.8rem; }
+  h2 { font-size: 1.4rem; }
+}
+
+@media (max-width: 575.98px) {
+  .container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}

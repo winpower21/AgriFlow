@@ -28,8 +28,42 @@
 
         <!-- Content Panel -->
         <div class="content-panel animate-fade-in-up animate-delay-2">
+            <!-- Unit Conversion Panel — shown only when this tab is active -->
+            <div v-if="activeTab === 'unitConversion'" class="conversion-panel">
+                <div class="conversion-field">
+                    <label class="conversion-label">
+                        <i class="bi bi-rulers"></i>
+                        Hectares to Acres conversion rate
+                    </label>
+                    <p class="conversion-hint">
+                        1 hectare = <strong>X</strong> acres. Standard value is 2.47105.
+                        Regional values in India may vary between 2.47 and 2.50.
+                    </p>
+                    <div class="conversion-input-row">
+                        <input
+                            v-model="hectaresToAcresRate"
+                            type="number"
+                            step="0.00001"
+                            min="0.1"
+                            class="form-control conversion-input"
+                            placeholder="e.g. 2.47105"
+                        />
+                        <button
+                            class="btn-add"
+                            :disabled="rateLoading || !hectaresToAcresRate"
+                            @click="saveConversionRate"
+                        >
+                            <i v-if="rateSaved" class="bi bi-check-lg"></i>
+                            <i v-else-if="rateLoading" class="bi bi-hourglass-split"></i>
+                            <i v-else class="bi bi-floppy"></i>
+                            <span>{{ rateSaved ? "Saved!" : "Save" }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Add Row -->
-            <div class="add-row">
+            <div v-if="activeTab !== 'unitConversion'" class="add-row">
                 <div class="add-inputs">
                     <input
                         v-model="newItem.name"
@@ -58,7 +92,7 @@
             </div>
 
             <!-- Items List -->
-            <TransitionGroup name="list" tag="div" class="items-list">
+            <TransitionGroup v-if="activeTab !== 'unitConversion'" name="list" tag="div" class="items-list">
                 <div
                     v-for="item in getItems(activeTab)"
                     :key="item.id"
@@ -140,7 +174,7 @@
 
             <!-- Empty State -->
             <div
-                v-if="getItems(activeTab).length === 0"
+                v-if="activeTab !== 'unitConversion' && getItems(activeTab).length === 0"
                 class="empty-state"
             >
                 <i class="bi" :class="currentTab.icon"></i>
@@ -223,6 +257,12 @@ const tabs = [
         icon: "bi-receipt",
         endpoint: "/settings/expense-categories",
     },
+    {
+        key: "unitConversion",
+        label: "Unit Conversion",
+        icon: "bi-rulers",
+        endpoint: null,
+    },
 ];
 
 const activeTab = ref("transformationTypes");
@@ -253,7 +293,39 @@ const wageTypes = ref([]);
 const batchStages = ref([]);
 const expenseCategories = ref([]);
 
+// ── Unit Conversion ──────────────────────────────────────
+const hectaresToAcresRate = ref("");
+const rateLoading = ref(false);
+const rateSaved = ref(false);
+
+async function fetchConversionRate() {
+    try {
+        const res = await api.get("/settings/app-config/hectares_to_acres_rate");
+        hectaresToAcresRate.value = res.data.value;
+    } catch {
+        // Key not yet set in DB — use default
+        hectaresToAcresRate.value = "2.47105";
+    }
+}
+
+async function saveConversionRate() {
+    if (!hectaresToAcresRate.value) return;
+    rateLoading.value = true;
+    try {
+        await api.put("/settings/app-config/hectares_to_acres_rate", {
+            value: String(hectaresToAcresRate.value),
+        });
+        rateSaved.value = true;
+        setTimeout(() => (rateSaved.value = false), 2000);
+    } catch (error) {
+        console.error("Failed to save conversion rate:", error);
+    } finally {
+        rateLoading.value = false;
+    }
+}
+
 function getItems(key) {
+    if (key === "unitConversion") return [];
     const map = {
         transformationTypes: transformationTypes,
         wageTypes: wageTypes,
@@ -386,6 +458,7 @@ async function fetchAll() {
     } catch (error) {
         console.error("Failed to fetch settings:", error);
     }
+    await fetchConversionRate();
 }
 
 // ── Lifecycle ───────────────────────────────────────
@@ -897,5 +970,48 @@ onBeforeUnmount(() => {
         padding: 8px 10px;
         font-size: 0.75rem;
     }
+}
+
+/* ── Unit Conversion Panel ──────────────────────────── */
+.conversion-panel {
+    padding: 24px 18px;
+}
+
+.conversion-field {
+    max-width: 420px;
+}
+
+.conversion-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.conversion-label i {
+    color: var(--sage);
+    font-size: 1rem;
+}
+
+.conversion-hint {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+    line-height: 1.5;
+}
+
+.conversion-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.conversion-input {
+    max-width: 180px;
+    font-size: 0.9rem;
+    padding: 8px 12px;
 }
 </style>

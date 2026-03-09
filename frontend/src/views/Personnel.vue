@@ -38,9 +38,10 @@
                         >
                             <td>
                                 <div class="person-identity">
-                                    <span class="person-avatar">{{
-                                        getInitials(p.name)
-                                    }}</span>
+                                    <span class="person-avatar">
+                                        <img v-if="p.photo" :src="photoUrl(p.photo)" class="avatar-img" :alt="p.name" />
+                                        <template v-else>{{ getInitials(p.name) }}</template>
+                                    </span>
                                     <div>
                                         <span class="person-name">{{
                                             p.name
@@ -125,9 +126,10 @@
             >
                 <div class="person-card-header">
                     <div class="person-identity">
-                        <span class="person-avatar">{{
-                            getInitials(p.name)
-                        }}</span>
+                        <span class="person-avatar">
+                            <img v-if="p.photo" :src="photoUrl(p.photo)" class="avatar-img" :alt="p.name" />
+                            <template v-else>{{ getInitials(p.name) }}</template>
+                        </span>
                         <div>
                             <div class="person-name">{{ p.name }}</div>
                             <div class="person-address" v-if="p.address">
@@ -205,27 +207,27 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content form-modal">
                     <div class="modal-body">
-                        <div
-                            class="modal-icon"
-                            :class="
-                                isEditing ? 'icon-edit' : 'icon-add'
-                            "
-                        >
-                            <i
-                                class="bi"
-                                :class="
-                                    isEditing
-                                        ? 'bi-pencil-square'
-                                        : 'bi-person-plus'
-                                "
-                            ></i>
+                        <!-- Photo picker -->
+                        <div class="photo-picker-wrapper">
+                            <div class="photo-picker" @click="photoInputRef.click()">
+                                <img v-if="form.photoPreview" :src="form.photoPreview" class="photo-preview" alt="Preview" />
+                                <span v-else class="photo-placeholder">
+                                    <i class="bi bi-camera"></i>
+                                </span>
+                                <button v-if="form.photoPreview" type="button" class="photo-clear" @click.stop="clearPhoto">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <input
+                                ref="photoInputRef"
+                                type="file"
+                                accept="image/jpeg,image/png,image/webp"
+                                class="d-none"
+                                @change="onPhotoSelected"
+                            />
                         </div>
                         <h5 class="modal-title">
-                            {{
-                                isEditing
-                                    ? "Edit Personnel"
-                                    : "Add Personnel"
-                            }}
+                            {{ isEditing ? "Edit Personnel" : "Add Personnel" }}
                         </h5>
 
                         <form
@@ -429,8 +431,12 @@ function getEmptyForm() {
         phone: "",
         address: "",
         is_active: true,
+        photoFile: null,       // File object from picker
+        photoPreview: null,    // object URL for local preview
     };
 }
+
+const photoInputRef = ref(null);
 
 const isFormValid = computed(() => {
     return (
@@ -469,6 +475,30 @@ function wageClass(typeName) {
     return "wage-other";
 }
 
+// ── Photo Helpers ────────────────────────────────────
+
+const API_BASE = "http://localhost:8000";
+
+function photoUrl(path) {
+    return path ? `${API_BASE}/uploads/${path}` : null;
+}
+
+function onPhotoSelected(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    // Revoke previous object URL to avoid memory leaks
+    if (form.value.photoPreview) URL.revokeObjectURL(form.value.photoPreview);
+    form.value.photoFile = file;
+    form.value.photoPreview = URL.createObjectURL(file);
+}
+
+function clearPhoto() {
+    if (form.value.photoPreview) URL.revokeObjectURL(form.value.photoPreview);
+    form.value.photoFile = null;
+    form.value.photoPreview = null;
+    if (photoInputRef.value) photoInputRef.value.value = "";
+}
+
 // ── Modal Handlers ──────────────────────────────────
 
 function openAddModal() {
@@ -489,6 +519,8 @@ function openEditModal(p) {
         phone: p.phone || "",
         address: p.address || "",
         is_active: p.is_active,
+        photoFile: null,
+        photoPreview: p.photo ? photoUrl(p.photo) : null,
     };
     if (!bsFormModal) bsFormModal = new Modal(formModalRef.value);
     bsFormModal.show();
@@ -533,7 +565,15 @@ async function handleFormSubmit() {
 
 async function addPersonnel(data) {
     try {
-        const response = await api.post("/personnel/", data);
+        const fd = new FormData();
+        fd.append("name", data.name);
+        fd.append("wage_type_id", data.wage_type_id);
+        fd.append("current_rate", data.current_rate);
+        if (data.phone)    fd.append("phone", data.phone);
+        if (data.address)  fd.append("address", data.address);
+        if (data.photoFile) fd.append("photo", data.photoFile);
+
+        const response = await api.post("/personnel/", fd);
         personnel.value.push(response.data);
     } catch (error) {
         console.error("Failed to add personnel:", error);
@@ -542,7 +582,16 @@ async function addPersonnel(data) {
 
 async function updatePersonnel(id, data) {
     try {
-        const response = await api.put(`/personnel/${id}`, data);
+        const fd = new FormData();
+        if (data.name !== undefined)          fd.append("name", data.name);
+        if (data.wage_type_id !== undefined)  fd.append("wage_type_id", data.wage_type_id);
+        if (data.current_rate !== undefined)  fd.append("current_rate", data.current_rate);
+        if (data.phone !== undefined)         fd.append("phone", data.phone);
+        if (data.address !== undefined)       fd.append("address", data.address);
+        if (data.is_active !== undefined)     fd.append("is_active", data.is_active);
+        if (data.photoFile)                   fd.append("photo", data.photoFile);
+
+        const response = await api.put(`/personnel/${id}`, fd);
         const idx = personnel.value.findIndex((p) => p.id === id);
         if (idx !== -1) personnel.value[idx] = response.data;
     } catch (error) {
@@ -572,6 +621,9 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+    if (form.value.photoPreview && form.value.photoFile) {
+        URL.revokeObjectURL(form.value.photoPreview);
+    }
     bsFormModal?.dispose();
     bsDeleteModal?.dispose();
 });
@@ -708,6 +760,13 @@ onBeforeUnmount(() => {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+}
+
+.avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
 }
 
 .person-name {
@@ -1109,6 +1168,65 @@ onBeforeUnmount(() => {
 
 .btn-modal-danger:hover:not(:disabled) {
     background: var(--sienna-light);
+}
+
+/* ── Photo Picker ───────────────────────────── */
+.photo-picker-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.photo-picker {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: var(--parchment-deep);
+    border: 2px dashed var(--border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: border-color var(--transition-fast);
+    margin: 0 auto 12px;
+}
+
+.photo-picker:hover {
+    border-color: var(--sage);
+}
+
+.photo-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+}
+
+.photo-placeholder i {
+    font-size: 1.6rem;
+    color: var(--text-secondary);
+}
+
+.photo-clear {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--sienna);
+    color: var(--white);
+    border: none;
+    font-size: 0.7rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
 }
 
 /* ── Responsive ─────────────────────────────── */

@@ -49,3 +49,8 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+
+# Local Folders
+docs/
+uploads/

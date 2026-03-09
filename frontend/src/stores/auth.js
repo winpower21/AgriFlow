@@ -10,7 +10,17 @@ export const useAuthStore = defineStore("auth", () => {
         JSON.parse(localStorage.getItem("userRoles") || null),
     );
 
-    const isAuthenticated = computed(() => !!token.value);
+    function isTokenExpired() {
+        if (!token.value) return true;
+        try {
+            const payload = JSON.parse(atob(token.value.split(".")[1]));
+            return Date.now() >= payload.exp * 1000;
+        } catch {
+            return true;
+        }
+    }
+
+    const isAuthenticated = computed(() => !!token.value && !isTokenExpired());
     const name = computed(
         () => user.value?.full_name || user.value?.email || "",
     );
@@ -74,6 +84,7 @@ export const useAuthStore = defineStore("auth", () => {
         user,
         userRoles,
         isAuthenticated,
+        isTokenExpired,
         name,
         login,
         register,

@@ -1,3 +1,38 @@
+"""
+Settings / lookup-table management router.
+
+Provides full CRUD for the four domain lookup tables used across the
+application:
+
+1. **Transformation Types** — processing stages a batch can go through
+   (e.g. CLEAN, DRY, BAG).
+2. **Wage Types** — payment models for personnel (e.g. hourly, daily,
+   per-piece).
+3. **Batch Stages** — the ordered lifecycle stages a batch passes through
+   (HARVEST -> CLEAN -> DRY -> BAG -> GRADE -> PACK -> RETAIL).
+4. **Expense Categories** — classification labels for plantation expenses.
+
+Endpoints (per entity)
+----------------------
+GET    /settings/<entity>            — List all records.
+POST   /settings/<entity>            — Create a new record (201).
+PUT    /settings/<entity>/{id}       — Update an existing record.
+DELETE /settings/<entity>/{id}       — Delete a record (204).
+
+Where ``<entity>`` is one of ``transformation-types``, ``wage-types``,
+``batch-stages``, or ``expense-categories``.
+
+Authentication / authorisation
+------------------------------
+All endpoints require a valid JWT (``get_current_user`` at the router
+level).  There is **no** additional admin-role restriction — any
+authenticated user can manage these lookup tables.
+
+Request / response schemas
+--------------------------
+Each entity has a triplet: ``*Create``, ``*Update``, ``*Schema``.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -5,20 +40,26 @@ from ..core.dependencies import get_current_user
 from ..crud.settings import SettingsService
 from ..database import get_db
 from ..schemas.settings import (
+    AppConfigSchema,
+    AppConfigUpdate,
     BatchStageCreate,
     BatchStageSchema,
     BatchStageUpdate,
     ExpenseCategoryCreate,
     ExpenseCategorySchema,
     ExpenseCategoryUpdate,
-    TransformationTypeCreate,
-    TransformationTypeSchema,
-    TransformationTypeUpdate,
     WageTypeCreate,
     WageTypeSchema,
     WageTypeUpdate,
 )
+from ..schemas.transformation import (
+    TransformationTypeCreate,
+    TransformationTypeSchema,
+    TransformationTypeUpdate,
+)
 
+# Auth: ``get_current_user`` at the router level — every endpoint requires a
+# valid JWT bearer token.  No additional role-based restrictions are applied.
 router = APIRouter(
     prefix="/settings",
     tags=["settings"],
@@ -28,11 +69,13 @@ router = APIRouter(
 
 
 # ── Transformation Types ─────────────────────────────
+# Define the processing stage types available for batch transformations
+# (e.g. CLEAN, DRY, BAG, GRADE, PACK).
 
 
 @router.get("/transformation-types", response_model=list[TransformationTypeSchema])
 def get_transformation_types(db: Session = Depends(get_db)):
-    """Retrieve all transformation types."""
+    """Retrieve all transformation types. Auth: any authenticated user."""
     service = SettingsService(db)
     return service.get_transformation_types()
 
@@ -63,11 +106,12 @@ def delete_transformation_type(type_id: int, db: Session = Depends(get_db)):
 
 
 # ── Wage Types ───────────────────────────────────────
+# Payment models for personnel (hourly, daily, per-piece, etc.).
 
 
 @router.get("/wage-types", response_model=list[WageTypeSchema])
 def get_wage_types(db: Session = Depends(get_db)):
-    """Retrieve all wage types."""
+    """Retrieve all wage types. Auth: any authenticated user."""
     service = SettingsService(db)
     return service.get_wage_types()
 
@@ -98,11 +142,13 @@ def delete_wage_type(type_id: int, db: Session = Depends(get_db)):
 
 
 # ── Batch Stages ─────────────────────────────────────
+# Ordered lifecycle stages a batch moves through:
+# HARVEST -> CLEAN -> DRY -> BAG -> GRADE -> PACK -> RETAIL
 
 
 @router.get("/batch-stages", response_model=list[BatchStageSchema])
 def get_batch_stages(db: Session = Depends(get_db)):
-    """Retrieve all batch stages."""
+    """Retrieve all batch stages. Auth: any authenticated user."""
     service = SettingsService(db)
     return service.get_batch_stages()
 
@@ -133,11 +179,13 @@ def delete_batch_stage(stage_id: int, db: Session = Depends(get_db)):
 
 
 # ── Expense Categories ──────────────────────────────
+# Classification labels for plantation/operational expenses (e.g. transport,
+# fertiliser, labour).
 
 
 @router.get("/expense-categories", response_model=list[ExpenseCategorySchema])
 def get_expense_categories(db: Session = Depends(get_db)):
-    """Retrieve all expense categories."""
+    """Retrieve all expense categories. Auth: any authenticated user."""
     service = SettingsService(db)
     return service.get_expense_categories()
 
@@ -165,3 +213,28 @@ def delete_expense_category(cat_id: int, db: Session = Depends(get_db)):
     service = SettingsService(db)
     if not service.delete_expense_category(cat_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense category not found")
+
+
+# ── App Config ────────────────────────────────────────────────────────────────
+# Runtime-configurable scalar settings (e.g. unit conversion rates).
+
+
+@router.get("/app-config/{key}", response_model=AppConfigSchema)
+def get_app_config(key: str, db: Session = Depends(get_db)):
+    """Retrieve a single app config value by key. Returns 404 if not set. Auth: any user."""
+    service = SettingsService(db)
+    value = service.get_app_config(key)
+    if value is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Config key '{key}' not found",
+        )
+    return {"key": key, "value": value}
+
+
+@router.put("/app-config/{key}", response_model=AppConfigSchema)
+def set_app_config(key: str, payload: AppConfigUpdate, db: Session = Depends(get_db)):
+    """Create or update a single app config value. Auth: any user."""
+    service = SettingsService(db)
+    obj = service.set_app_config(key, payload.value)
+    return obj

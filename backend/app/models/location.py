@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, List
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -18,9 +18,6 @@ class Location(Base):
     __tablename__ = "locations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    plantation_id: Mapped[int] = mapped_column(
-        ForeignKey("plantations.id"), nullable=False
-    )
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     city: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     state: Mapped[str] = mapped_column(String, nullable=True)
@@ -32,7 +29,7 @@ class Location(Base):
         DateTime, default=func.now(), onupdate=func.now()
     )
 
-    plantation: Mapped["Plantation"] = relationship(
+    plantations: Mapped[List["Plantation"]] = relationship(
         "Plantation", back_populates="location"
     )
     weather_data: Mapped[List["Weather"]] = relationship(

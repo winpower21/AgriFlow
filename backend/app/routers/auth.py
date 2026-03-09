@@ -1,3 +1,25 @@
+"""
+Authentication router — token issuance via OAuth2 password flow.
+
+Endpoints
+---------
+POST /auth/login
+    Accepts OAuth2-compatible form data (``username`` + ``password``).
+    Despite the field name ``username``, the value must be the user's
+    **email address** (the User model has no ``username`` column).
+
+    Returns a JWT bearer token together with basic user info (id, email,
+    full_name, roles).
+
+Authentication / authorisation
+------------------------------
+- This router has **no** auth dependency — it is the entry point for
+  obtaining a token.
+- The JWT payload stores ``{"user": <user.id>}`` and is signed with HS256.
+
+Response schema: ``TokenWithUser``
+"""
+
 from datetime import timedelta
 from typing import Annotated
 
@@ -11,6 +33,7 @@ from app.crud import UserService
 from app.database import get_db
 from app.schemas import TokenWithUser
 
+# No authentication dependency — this router issues tokens to unauthenticated callers.
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -22,22 +45,28 @@ def login_for_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests.
     """
-    # OAuth2PasswordRequestForm has 'username' field, but we use email for authentication. The email has to be sent as 'username' in the form data.
+    # OAuth2PasswordRequestForm has 'username' field, but we use email for authentication.
+    # The client must send the user's email in the ``username`` form field.
     user_service = UserService(db)
     user = user_service.authenticate_user(form_data.username, form_data.password)
     if not user:
+        # Return 401 with WWW-Authenticate header per OAuth2 spec
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Build a JWT whose payload is {"user": <int>} with a configurable expiry
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"user": user.id}, expires_delta=access_token_expires
     )
 
-    print(user.roles)
+    print(user.roles)  # Debug log — TODO: remove or replace with proper logging
 
+    # Response includes the token plus a lightweight user summary so the
+    # frontend can populate its auth store without an extra /me request.
     return {
         "access_token": access_token,
         "token_type": "bearer",

@@ -6,8 +6,7 @@
                 <h2 class="page-title">Plantations</h2>
                 <p class="page-subtitle">
                     {{ plantations.length }} registered &mdash;
-                    {{ activePlantations.length }} active,
-                    {{ expiredPlantations.length }} expired
+                    {{ activePlantations.length }} active
                 </p>
             </div>
             <button v-if="isAdmin" class="btn-add" @click="openAddModal">
@@ -16,7 +15,7 @@
             </button>
         </div>
 
-        <!-- Tab Navigation -->
+        <!-- Tab Bar -->
         <div class="tab-bar animate-fade-in-up animate-delay-1">
             <button
                 class="tab-btn"
@@ -24,277 +23,450 @@
                 @click="activeTab = 'active'"
             >
                 <i class="bi bi-check-circle-fill"></i>
-                <span class="tab-label">Active Leases</span>
+                <span class="tab-label">Active</span>
                 <span class="tab-count">{{ activePlantations.length }}</span>
             </button>
             <button
                 class="tab-btn"
-                :class="{ active: activeTab === 'expired' }"
-                @click="activeTab = 'expired'"
+                :class="{ active: activeTab === 'all' }"
+                @click="activeTab = 'all'"
             >
-                <i class="bi bi-x-circle-fill"></i>
-                <span class="tab-label">Expired Leases</span>
-                <span class="tab-count">{{ expiredPlantations.length }}</span>
+                <i class="bi bi-list-ul"></i>
+                <span class="tab-label">All Plantations</span>
+                <span class="tab-count">{{ plantations.length }}</span>
             </button>
         </div>
 
-        <!-- Desktop Table -->
-        <div
-            v-if="currentPlantations.length > 0"
-            class="table-wrapper d-none d-md-block animate-fade-in-up animate-delay-2"
-            :class="{ 'table-expired': activeTab === 'expired' }"
-        >
-            <div class="table-scroll">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Plantation</th>
-                            <th>Location</th>
-                            <th>Lease Start</th>
-                            <th>Lease End</th>
-                            <th>Lease Cost</th>
-                            <th>Status</th>
-                            <th class="th-actions">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            v-for="(p, i) in currentPlantations"
-                            :key="p.id"
-                            class="data-row"
-                            :style="{ animationDelay: `${i * 0.04}s` }"
-                        >
-                            <td>
-                                <div class="plantation-identity">
-                                    <span
-                                        class="plantation-icon"
-                                        :class="{
-                                            'plantation-icon-expired':
-                                                activeTab === 'expired',
-                                        }"
-                                    >
-                                        <i class="bi bi-tree"></i>
-                                    </span>
-                                    <span class="plantation-name">{{
-                                        p.name
-                                    }}</span>
-                                </div>
-                            </td>
-                            <td class="location-cell">
-                                <span v-if="p.location" class="location-text">
-                                    <i class="bi bi-geo-alt"></i>
-                                    {{ p.location.city
-                                    }}<template v-if="p.location.state"
-                                        >, {{ p.location.state }}</template
-                                    >
-                                </span>
-                                <span v-else class="text-muted">&mdash;</span>
-                            </td>
-                            <td class="date-cell">
-                                {{ formatDate(p.lease_start) }}
-                            </td>
-                            <td class="date-cell">
-                                {{ formatDate(p.lease_end) }}
-                            </td>
-                            <td>
-                                <span
-                                    v-if="getLeaseExpense(p.id)"
-                                    class="cost-chip"
-                                    :class="{
-                                        'cost-chip-muted':
-                                            activeTab === 'expired',
-                                    }"
-                                >
-                                    {{
-                                        formatCurrency(
-                                            getLeaseExpense(p.id).amount,
-                                        )
-                                    }}
-                                </span>
-                                <button
-                                    v-else-if="
-                                        isAdmin && activeTab === 'active'
-                                    "
-                                    class="btn-lease-cost"
-                                    @click="openLeaseCostModal(p)"
-                                    title="Add lease cost"
-                                >
-                                    <i class="bi bi-plus-circle"></i>
-                                    Add
-                                </button>
-                                <span v-else class="text-muted">&mdash;</span>
-                            </td>
-                            <td>
-                                <span
-                                    class="status-chip"
-                                    :class="leaseStatusClass(p)"
-                                >
-                                    <i
-                                        class="bi"
-                                        :class="leaseStatusIcon(p)"
-                                    ></i>
-                                    {{ leaseStatusLabel(p) }}
-                                </span>
-                            </td>
-                            <td>
-                                <div class="action-group">
-                                    <button
-                                        class="btn-action btn-details"
-                                        title="Details"
-                                        @click="openDetailsModal(p)"
-                                    >
-                                        <i class="bi bi-clock-history"></i>
-                                    </button>
-                                    <template v-if="isAdmin">
-                                        <button
-                                            class="btn-action btn-edit"
-                                            :title="
-                                                activeTab === 'expired'
-                                                    ? 'Renew / Edit'
-                                                    : 'Edit'
-                                            "
-                                            @click="openEditModal(p)"
-                                        >
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button
-                                            class="btn-action btn-delete"
-                                            title="Delete"
-                                            @click="openDeleteModal(p)"
-                                        >
-                                            <i class="bi bi-trash3"></i>
-                                        </button>
-                                    </template>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Mobile Cards -->
-        <div v-if="currentPlantations.length > 0" class="d-md-none">
+        <!-- Cards for active tab -->
+        <template v-if="activeTab === 'active'">
             <div
-                v-for="(p, i) in currentPlantations"
-                :key="p.id"
-                class="plantation-card animate-fade-in-up"
-                :class="{ 'plantation-card-expired': activeTab === 'expired' }"
-                :style="{ animationDelay: `${i * 0.06}s` }"
+                v-if="activePlantations.length > 0"
+                class="cards-grid animate-fade-in-up animate-delay-2"
             >
-                <div class="plantation-card-header">
-                    <div class="plantation-identity">
-                        <span
-                            class="plantation-icon"
-                            :class="{
-                                'plantation-icon-expired':
-                                    activeTab === 'expired',
-                            }"
-                        >
-                            <i class="bi bi-tree"></i>
-                        </span>
-                        <span class="plantation-name">{{ p.name }}</span>
-                    </div>
-                    <span class="status-chip" :class="leaseStatusClass(p)">
-                        <i class="bi" :class="leaseStatusIcon(p)"></i>
-                        {{ leaseStatusLabel(p) }}
-                    </span>
-                </div>
-                <div class="plantation-card-body">
-                    <div v-if="p.location" class="card-location">
-                        <i class="bi bi-geo-alt"></i>
-                        {{ p.location.city
-                        }}<template v-if="p.location.state"
-                            >, {{ p.location.state }}</template
-                        >
-                    </div>
-                    <div class="lease-dates">
-                        <div class="lease-date-item">
-                            <span class="lease-label">Lease Start</span>
-                            <span class="lease-value">{{
-                                formatDate(p.lease_start)
-                            }}</span>
-                        </div>
-                        <div class="lease-date-item">
-                            <span class="lease-label">Lease End</span>
-                            <span class="lease-value">{{
-                                formatDate(p.lease_end)
-                            }}</span>
-                        </div>
-                        <div
-                            v-if="activeTab === 'active'"
-                            class="lease-date-item"
-                        >
-                            <span class="lease-label">Lease Cost</span>
-                            <span
-                                v-if="getLeaseExpense(p.id)"
-                                class="lease-value"
-                            >
-                                {{
-                                    formatCurrency(getLeaseExpense(p.id).amount)
-                                }}
+                <div
+                    v-for="(p, i) in activePlantations"
+                    :key="p.id"
+                    class="plantation-card"
+                    :style="{ animationDelay: `${i * 0.05}s` }"
+                    @click="openDetailsModal(p)"
+                >
+                    <div class="card-top">
+                        <div class="card-identity">
+                            <span class="card-icon">
+                                <i class="bi bi-tree"></i>
                             </span>
-                            <button
-                                v-else-if="isAdmin"
-                                class="btn-lease-cost btn-lease-cost-sm"
-                                @click="openLeaseCostModal(p)"
+                            <span class="card-name">{{ p.name }}</span>
+                        </div>
+                        <span class="status-chip status-active">
+                            <i class="bi bi-circle-fill"></i> Active
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div v-if="p.location" class="card-location">
+                            <i class="bi bi-geo-alt"></i>
+                            {{ p.location.city
+                            }}<template v-if="p.location.state"
+                                >, {{ p.location.state }}</template
                             >
-                                <i class="bi bi-plus-circle"></i>
-                                Add
-                            </button>
-                            <span v-else class="lease-value">&mdash;</span>
+                        </div>
+                        <div v-if="p.area_hectares" class="card-area">
+                            <i class="bi bi-bounding-box"></i>
+                            {{ formatHa(p.area_hectares) }}
+                        </div>
+                        <div v-if="latestLease(p)" class="card-lease">
+                            <i class="bi bi-calendar2-range"></i>
+                            {{ formatDate(latestLease(p).start_date) }}
+                            <template v-if="latestLease(p).end_date">
+                                &rarr; {{ formatDate(latestLease(p).end_date) }}
+                            </template>
+                            <template v-else> &rarr; open-ended</template>
                         </div>
                     </div>
-                    <div class="action-group action-group-mobile">
+                    <div class="card-actions" @click.stop>
                         <button
                             class="btn-action btn-details"
+                            title="Details &amp; Weather"
                             @click="openDetailsModal(p)"
                         >
-                            <i class="bi bi-clock-history"></i>
-                            History
+                            <i class="bi bi-info-circle"></i>
                         </button>
                         <template v-if="isAdmin">
                             <button
                                 class="btn-action btn-edit"
+                                title="Edit"
                                 @click="openEditModal(p)"
                             >
                                 <i class="bi bi-pencil"></i>
-                                {{ activeTab === "expired" ? "Renew" : "Edit" }}
                             </button>
                             <button
                                 class="btn-action btn-delete"
+                                title="Delete"
                                 @click="openDeleteModal(p)"
                             >
                                 <i class="bi bi-trash3"></i>
-                                Delete
                             </button>
                         </template>
                     </div>
                 </div>
             </div>
-        </div>
+            <div
+                v-else-if="!loading"
+                class="empty-state animate-fade-in-up animate-delay-2"
+            >
+                <i class="bi bi-tree"></i>
+                <p>No active plantations</p>
+            </div>
+        </template>
 
-        <!-- Empty State -->
+        <!-- Cards for all tab -->
+        <template v-else>
+            <div
+                v-if="plantations.length > 0"
+                class="cards-grid animate-fade-in-up animate-delay-2"
+            >
+                <div
+                    v-for="(p, i) in plantations"
+                    :key="p.id"
+                    class="plantation-card"
+                    :class="{ 'plantation-card-inactive': !p.is_active }"
+                    :style="{ animationDelay: `${i * 0.04}s` }"
+                    @click="openDetailsModal(p)"
+                >
+                    <div class="card-top">
+                        <div class="card-identity">
+                            <span
+                                class="card-icon"
+                                :class="{ 'card-icon-inactive': !p.is_active }"
+                            >
+                                <i class="bi bi-tree"></i>
+                            </span>
+                            <span class="card-name">{{ p.name }}</span>
+                        </div>
+                        <span
+                            class="status-chip"
+                            :class="p.is_active ? 'status-active' : 'status-inactive'"
+                        >
+                            <i class="bi" :class="p.is_active ? 'bi-circle-fill' : 'bi-circle'"></i>
+                            {{ p.is_active ? "Active" : "Inactive" }}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div v-if="p.location" class="card-location">
+                            <i class="bi bi-geo-alt"></i>
+                            {{ p.location.city
+                            }}<template v-if="p.location.state"
+                                >, {{ p.location.state }}</template
+                            >
+                        </div>
+                        <div v-if="p.area_hectares" class="card-area">
+                            <i class="bi bi-bounding-box"></i>
+                            {{ formatHa(p.area_hectares) }}
+                        </div>
+                    </div>
+                    <div class="card-actions" @click.stop>
+                        <button
+                            class="btn-action btn-details"
+                            title="Details"
+                            @click="openDetailsModal(p)"
+                        >
+                            <i class="bi bi-info-circle"></i>
+                        </button>
+                        <template v-if="isAdmin">
+                            <button
+                                class="btn-action btn-edit"
+                                title="Edit"
+                                @click="openEditModal(p)"
+                            >
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button
+                                class="btn-action btn-delete"
+                                title="Delete"
+                                @click="openDeleteModal(p)"
+                            >
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            <div
+                v-else-if="!loading"
+                class="empty-state animate-fade-in-up animate-delay-2"
+            >
+                <i class="bi bi-tree"></i>
+                <p>No plantations yet. Add your first one.</p>
+            </div>
+        </template>
+
+        <!-- ══════════ DETAIL MODAL ══════════ -->
         <div
-            v-if="currentPlantations.length === 0"
-            class="empty-state animate-fade-in-up animate-delay-2"
+            class="modal fade"
+            id="detailModal"
+            tabindex="-1"
+            aria-hidden="true"
+            ref="detailModalRef"
         >
-            <i
-                class="bi"
-                :class="activeTab === 'active' ? 'bi-tree' : 'bi-check-circle'"
-            ></i>
-            <p>
-                {{
-                    activeTab === "active"
-                        ? "No active leases"
-                        : "No expired leases"
-                }}
-            </p>
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content detail-modal-content">
+                    <div class="modal-header detail-modal-header">
+                        <div class="detail-modal-title">
+                            <span class="card-icon">
+                                <i class="bi bi-tree"></i>
+                            </span>
+                            <h5 class="modal-title">
+                                {{ selectedPlantation?.name }}
+                            </h5>
+                        </div>
+                        <button
+                            type="button"
+                            class="btn-close-modal"
+                            data-bs-dismiss="modal"
+                        >
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body detail-modal-body" v-if="selectedPlantation">
+                        <div class="detail-layout">
+                            <!-- Left panel: info + leases -->
+                            <div class="detail-left">
+                                <!-- Plantation Info -->
+                                <div class="detail-section">
+                                    <h6 class="detail-section-title">
+                                        <i class="bi bi-info-circle"></i>
+                                        Plantation Info
+                                    </h6>
+                                    <div class="detail-info-grid">
+                                        <div class="detail-info-item" v-if="selectedPlantation.location">
+                                            <span class="detail-info-label">Location</span>
+                                            <span class="detail-info-value">
+                                                <i class="bi bi-geo-alt text-muted me-1"></i>
+                                                {{ selectedPlantation.location.city
+                                                }}<template v-if="selectedPlantation.location.state">, {{ selectedPlantation.location.state }}</template>
+                                            </span>
+                                        </div>
+                                        <div class="detail-info-item" v-if="selectedPlantation.area_hectares">
+                                            <span class="detail-info-label">Area</span>
+                                            <span class="detail-info-value">{{ formatHa(selectedPlantation.area_hectares) }}</span>
+                                        </div>
+                                        <div class="detail-info-item">
+                                            <span class="detail-info-label">Status</span>
+                                            <span class="status-chip" :class="selectedPlantation.is_active ? 'status-active' : 'status-inactive'">
+                                                <i class="bi" :class="selectedPlantation.is_active ? 'bi-circle-fill' : 'bi-circle'"></i>
+                                                {{ selectedPlantation.is_active ? "Active" : "Inactive" }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Lease History -->
+                                <div class="detail-section">
+                                    <div class="detail-section-header">
+                                        <h6 class="detail-section-title">
+                                            <i class="bi bi-calendar2-range"></i>
+                                            Lease History
+                                        </h6>
+                                        <button
+                                            v-if="isAdmin"
+                                            class="btn-sm-action"
+                                            @click="showAddLease = !showAddLease"
+                                        >
+                                            <i class="bi bi-plus-lg"></i>
+                                            Add Lease
+                                        </button>
+                                    </div>
+
+                                    <!-- Add Lease Form -->
+                                    <div v-if="showAddLease" class="add-lease-form">
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-6">
+                                                <label class="form-label">Start Date *</label>
+                                                <input
+                                                    v-model="leaseForm.start_date"
+                                                    type="date"
+                                                    class="form-control form-control-sm"
+                                                />
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label">End Date</label>
+                                                <input
+                                                    v-model="leaseForm.end_date"
+                                                    type="date"
+                                                    class="form-control form-control-sm"
+                                                />
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label">Cost (&#8377;)</label>
+                                                <input
+                                                    v-model="leaseForm.cost"
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    class="form-control form-control-sm"
+                                                    placeholder="Optional"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button
+                                                class="btn-sm-primary"
+                                                :disabled="!leaseForm.start_date || leaseSaving"
+                                                @click="submitAddLease"
+                                            >
+                                                <i class="bi bi-check-lg"></i>
+                                                Save Lease
+                                            </button>
+                                            <button
+                                                class="btn-sm-cancel"
+                                                @click="showAddLease = false; leaseForm = { start_date: '', end_date: '', cost: '' }"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Lease Records -->
+                                    <div v-if="selectedPlantation.lease?.length" class="lease-list">
+                                        <div
+                                            v-for="lease in selectedPlantation.lease"
+                                            :key="lease.id"
+                                            class="lease-row"
+                                        >
+                                            <div class="lease-dates-text">
+                                                <i class="bi bi-calendar3"></i>
+                                                {{ formatDate(lease.start_date) }}
+                                                <span class="lease-arrow">&#8594;</span>
+                                                {{ lease.end_date ? formatDate(lease.end_date) : "open-ended" }}
+                                            </div>
+                                            <span v-if="lease.cost" class="lease-cost-badge">
+                                                {{ formatCurrency(lease.cost) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div v-else class="lease-empty">
+                                        <i class="bi bi-calendar-x"></i>
+                                        No lease records
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right panel: weather -->
+                            <div class="detail-right">
+                                <div class="detail-section">
+                                    <div class="detail-section-header">
+                                        <h6 class="detail-section-title">
+                                            <i class="bi bi-cloud-sun"></i>
+                                            Weather
+                                        </h6>
+                                        <button
+                                            class="btn-sm-action"
+                                            :disabled="weatherLoading"
+                                            @click="loadWeather(selectedPlantation.id, true)"
+                                            title="Refresh weather"
+                                        >
+                                            <i class="bi bi-arrow-clockwise" :class="{ 'spin': weatherLoading }"></i>
+                                            Refresh
+                                        </button>
+                                    </div>
+
+                                    <!-- Loading -->
+                                    <div v-if="weatherLoading" class="weather-loading">
+                                        <i class="bi bi-cloud-download"></i>
+                                        Loading weather...
+                                    </div>
+
+                                    <!-- Error -->
+                                    <div v-else-if="weatherError" class="weather-error">
+                                        <i class="bi bi-exclamation-triangle"></i>
+                                        {{ weatherError }}
+                                    </div>
+
+                                    <!-- No location -->
+                                    <div v-else-if="!selectedPlantation.location_id" class="weather-no-location">
+                                        <i class="bi bi-geo-alt-fill"></i>
+                                        <p>Assign a location to this plantation to see weather data.</p>
+                                    </div>
+
+                                    <!-- Weather data -->
+                                    <div v-else-if="weatherData" class="weather-panel">
+                                        <!-- Current conditions -->
+                                        <div class="weather-current">
+                                            <div class="weather-temp-block">
+                                                <span class="weather-temp">
+                                                    {{ weatherData.raw_json?.current?.temperature?.degrees != null
+                                                        ? Math.round(weatherData.raw_json.current.temperature.degrees) + '°'
+                                                        : '—' }}
+                                                </span>
+                                                <span class="weather-unit">
+                                                    {{ weatherData.raw_json?.current?.temperature?.unit === 'FAHRENHEIT' ? 'F' : 'C' }}
+                                                </span>
+                                            </div>
+                                            <div class="weather-meta">
+                                                <div class="weather-condition">
+                                                    {{ weatherData.raw_json?.current?.weatherCondition?.description?.text || '—' }}
+                                                </div>
+                                                <div class="weather-details">
+                                                    <span v-if="weatherData.raw_json?.current?.humidity?.value != null">
+                                                        <i class="bi bi-droplet"></i>
+                                                        {{ weatherData.raw_json.current.humidity.value }}%
+                                                    </span>
+                                                    <span v-if="weatherData.raw_json?.current?.wind?.speed?.value != null">
+                                                        <i class="bi bi-wind"></i>
+                                                        {{ Math.round(weatherData.raw_json.current.wind.speed.value) }}
+                                                        {{ weatherData.raw_json.current.wind.speed.unit || 'km/h' }}
+                                                    </span>
+                                                    <span v-if="weatherData.raw_json?.current?.feelsLike?.degrees != null">
+                                                        Feels {{ Math.round(weatherData.raw_json.current.feelsLike.degrees) }}°
+                                                    </span>
+                                                </div>
+                                                <div class="weather-fetched-at">
+                                                    <i class="bi bi-clock"></i>
+                                                    {{ formatDateTime(weatherData.fetched_at) }}
+                                                    <span v-if="weatherData.is_manual" class="badge-manual">manual</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Hourly forecast strip -->
+                                        <div
+                                            v-if="weatherData.raw_json?.hourly?.forecastHours?.length"
+                                            class="hourly-section"
+                                        >
+                                            <p class="hourly-label">Hourly forecast</p>
+                                            <div class="hourly-strip">
+                                                <div
+                                                    v-for="(h, idx) in weatherData.raw_json.hourly.forecastHours.slice(0, 12)"
+                                                    :key="idx"
+                                                    class="hourly-item"
+                                                >
+                                                    <span class="hourly-time">{{ formatHour(h.interval?.startTime) }}</span>
+                                                    <span class="hourly-temp">
+                                                        {{ h.temperature?.degrees != null
+                                                            ? Math.round(h.temperature.degrees) + '°'
+                                                            : '—' }}
+                                                    </span>
+                                                    <span class="hourly-cond">
+                                                        {{ h.weatherCondition?.description?.text || '' }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- No weather yet -->
+                                    <div v-else class="weather-no-data">
+                                        <i class="bi bi-cloud"></i>
+                                        <p>No weather data yet.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- ══════════ MODALS ══════════ -->
-
-        <!-- Add / Edit Modal -->
+        <!-- ══════════ ADD / EDIT MODAL ══════════ -->
         <div
             class="modal fade"
             id="formModal"
@@ -303,380 +475,124 @@
             ref="formModalRef"
         >
             <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content form-modal">
-                    <div class="modal-body">
-                        <div
-                            class="modal-icon"
-                            :class="isEditing ? 'icon-edit' : 'icon-add'"
-                        >
-                            <i
-                                class="bi"
-                                :class="
-                                    isEditing ? 'bi-pencil-square' : 'bi-tree'
-                                "
-                            ></i>
-                        </div>
+                <div class="modal-content form-modal-content">
+                    <div class="modal-header form-modal-header">
                         <h5 class="modal-title">
-                            {{
-                                isEditing ? "Edit Plantation" : "Add Plantation"
-                            }}
+                            {{ editingPlantation ? "Edit Plantation" : "Add Plantation" }}
                         </h5>
-                        <p
-                            v-if="isEditing && isExpired(editingPlantation)"
-                            class="modal-hint"
-                        >
-                            <i class="bi bi-info-circle"></i>
-                            Changing lease dates will archive the current lease
-                            to history.
-                        </p>
+                        <button type="button" class="btn-close-modal" data-bs-dismiss="modal">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Name *</label>
+                            <input
+                                v-model="form.name"
+                                type="text"
+                                class="form-control"
+                                placeholder="e.g. North Field"
+                            />
+                        </div>
 
-                        <form
-                            class="plantation-form"
-                            @submit.prevent="handleFormSubmit"
-                        >
-                            <div class="form-group">
-                                <label class="form-label" for="pName"
-                                    >Plantation Name</label
-                                >
+                        <!-- Location search -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Location</label>
+                            <div class="location-search-wrapper">
                                 <input
-                                    id="pName"
-                                    v-model="form.name"
+                                    :value="formLocationLabel"
                                     type="text"
                                     class="form-control"
-                                    placeholder="e.g. Green Valley Estate"
-                                    required
+                                    placeholder="Search city..."
+                                    autocomplete="off"
+                                    @input="onLocationInput"
                                 />
-                            </div>
-
-                            <!-- Location Search -->
-                            <div class="form-group">
-                                <label class="form-label">Location</label>
-                                <div v-if="form.location" class="location-chip">
-                                    <i class="bi bi-geo-alt-fill"></i>
-                                    <span
-                                        >{{ form.location.city
-                                        }}<template v-if="form.location.state"
-                                            >,
-                                            {{ form.location.state }}</template
-                                        ></span
+                                <div v-if="locationResults.length" class="location-results">
+                                    <div
+                                        v-for="loc in locationResults"
+                                        :key="loc.place_id || loc.id"
+                                        class="location-result-item"
+                                        @click="selectLocation(loc)"
                                     >
-                                    <button
-                                        type="button"
-                                        class="location-chip-clear"
-                                        @click="clearLocation"
-                                    >
-                                        <i class="bi bi-x-lg"></i>
-                                    </button>
-                                </div>
-                                <div v-else class="location-search-wrapper">
-                                    <div class="location-search-input-wrap">
-                                        <i
-                                            class="bi bi-search location-search-icon"
-                                        ></i>
-                                        <input
-                                            v-model="locationQuery"
-                                            type="text"
-                                            class="form-control location-search-input"
-                                            placeholder="Search for a city or region..."
-                                            @input="onLocationSearch"
-                                            @focus="
-                                                showPredictions =
-                                                    locationPredictions.length >
-                                                    0
-                                            "
-                                            @blur="hidePredictionsDelayed"
-                                        />
-                                        <span
-                                            v-if="locationSearching"
-                                            class="location-spinner"
-                                        >
-                                            <i
-                                                class="bi bi-arrow-repeat spin"
-                                            ></i>
-                                        </span>
+                                        <i :class="loc.source === 'db' ? 'bi bi-database text-muted' : 'bi bi-geo-alt text-muted'"></i>
+                                        <span>{{ loc.description || (loc.city + (loc.state ? ', ' + loc.state : '')) }}</span>
+                                        <span class="location-result-source">{{ loc.source === 'db' ? 'saved' : 'google' }}</span>
                                     </div>
                                     <div
-                                        v-if="
-                                            showPredictions &&
-                                            locationPredictions.length > 0
-                                        "
-                                        class="location-dropdown"
+                                        v-if="!locationGoogleWasSearched"
+                                        class="location-search-online"
+                                        @click="onLocationSearchOnline"
                                     >
-                                        <button
-                                            v-for="pred in locationPredictions"
-                                            :key="pred.place_id"
-                                            type="button"
-                                            class="location-dropdown-item"
-                                            @mousedown.prevent="
-                                                selectPrediction(pred)
-                                            "
-                                        >
-                                            <i class="bi bi-geo-alt"></i>
-                                            <div>
-                                                <div class="loc-main">
-                                                    {{ pred.main_text }}
-                                                </div>
-                                                <div class="loc-secondary">
-                                                    {{ pred.secondary_text }}
-                                                </div>
-                                            </div>
-                                        </button>
+                                        <i class="bi bi-search"></i>
+                                        <span>Search online</span>
                                     </div>
                                 </div>
                             </div>
-
-                            <div class="form-row">
-                                <div class="form-group flex-1">
-                                    <label class="form-label" for="pLeaseStart"
-                                        >Lease Start</label
-                                    >
-                                    <input
-                                        id="pLeaseStart"
-                                        v-model="form.lease_start"
-                                        type="date"
-                                        class="form-control"
-                                        required
-                                    />
-                                </div>
-                                <div class="form-group flex-1">
-                                    <label class="form-label" for="pLeaseEnd"
-                                        >Lease End</label
-                                    >
-                                    <input
-                                        id="pLeaseEnd"
-                                        v-model="form.lease_end"
-                                        type="date"
-                                        class="form-control"
-                                        required
-                                    />
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button
-                            type="button"
-                            class="btn-modal btn-modal-cancel"
-                            data-bs-dismiss="modal"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            class="btn-modal btn-modal-confirm"
-                            @click="handleFormSubmit"
-                            :disabled="!isFormValid"
-                        >
-                            {{ isEditing ? "Save Changes" : "Add Plantation" }}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Lease Cost Modal -->
-        <div
-            class="modal fade"
-            id="leaseCostModal"
-            tabindex="-1"
-            aria-hidden="true"
-            ref="leaseCostModalRef"
-        >
-            <div class="modal-dialog modal-dialog-centered modal-sm">
-                <div class="modal-content form-modal">
-                    <div class="modal-body">
-                        <div class="modal-icon icon-lease">
-                            <i class="bi bi-cash-coin"></i>
-                        </div>
-                        <h5 class="modal-title">Add Lease Cost</h5>
-                        <p
-                            v-if="leaseCostTarget"
-                            class="modal-desc"
-                            style="margin-bottom: 16px"
-                        >
-                            for
-                            <strong>{{ leaseCostTarget.name }}</strong>
-                        </p>
-
-                        <div
-                            v-if="!leaseCostCategoryId"
-                            class="alert-missing-category"
-                        >
-                            <i class="bi bi-exclamation-triangle-fill"></i>
-                            <div>
-                                <strong>"Lease Cost"</strong> expense category
-                                not found. Please create it in
-                                <RouterLink to="/settings">Settings</RouterLink>
-                                first.
-                            </div>
+                            <small v-if="form.location_id" class="text-muted">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                Location selected
+                            </small>
                         </div>
 
-                        <div v-else class="plantation-form">
-                            <div class="form-group">
-                                <label class="form-label" for="leaseCostAmount"
-                                    >Amount</label
-                                >
+                        <!-- Area -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Area (hectares)</label>
+                            <div class="area-input-row">
                                 <input
-                                    id="leaseCostAmount"
-                                    v-model.number="leaseCostAmount"
+                                    v-model="form.area_hectares"
                                     type="number"
-                                    step="0.01"
+                                    step="0.0001"
                                     min="0"
                                     class="form-control"
-                                    placeholder="0.00"
+                                    placeholder="e.g. 2.5"
+                                />
+                                <span v-if="areaAcresHint" class="area-hint">{{ areaAcresHint }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Initial lease -->
+                        <hr class="my-3" style="border-color: var(--border-light);" />
+                        <p class="form-section-label">Initial Lease <span class="text-muted">(optional)</span></p>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label">Start Date</label>
+                                <input v-model="form.lease_start" type="date" class="form-control" />
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label">End Date</label>
+                                <input v-model="form.lease_end" type="date" class="form-control" />
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Lease Cost (&#8377;)</label>
+                                <input
+                                    v-model="form.lease_cost"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    class="form-control"
+                                    placeholder="Optional"
                                 />
                             </div>
                         </div>
                     </div>
-                    <div class="modal-footer">
-                        <button
-                            type="button"
-                            class="btn-modal btn-modal-cancel"
-                            data-bs-dismiss="modal"
-                        >
+                    <div class="modal-footer form-modal-footer">
+                        <button type="button" class="btn-modal btn-modal-cancel" data-bs-dismiss="modal">
                             Cancel
                         </button>
                         <button
-                            v-if="leaseCostCategoryId"
                             type="button"
                             class="btn-modal btn-modal-confirm"
-                            @click="submitLeaseCost"
-                            :disabled="!leaseCostAmount || leaseCostAmount <= 0"
+                            :disabled="!form.name.trim()"
+                            @click="submitForm"
                         >
-                            Add Expense
+                            {{ editingPlantation ? "Save Changes" : "Add Plantation" }}
                         </button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Details / Lease History Modal -->
-        <div
-            class="modal fade"
-            id="detailsModal"
-            tabindex="-1"
-            aria-hidden="true"
-            ref="detailsModalRef"
-        >
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content form-modal">
-                    <div class="modal-body" v-if="detailsTarget">
-                        <div class="modal-icon icon-history">
-                            <i class="bi bi-clock-history"></i>
-                        </div>
-                        <h5 class="modal-title">{{ detailsTarget.name }}</h5>
-                        <p
-                            v-if="detailsTarget.location"
-                            class="modal-desc"
-                            style="margin-bottom: 8px"
-                        >
-                            <i class="bi bi-geo-alt"></i>
-                            {{ detailsTarget.location.city
-                            }}<template v-if="detailsTarget.location.state"
-                                >, {{ detailsTarget.location.state }}</template
-                            ><template v-if="detailsTarget.location.country"
-                                >,
-                                {{ detailsTarget.location.country }}</template
-                            >
-                        </p>
-                        <p class="modal-desc" style="margin-bottom: 20px">
-                            Lease history &mdash;
-                            {{ leaseHistory.length }}
-                            {{
-                                leaseHistory.length === 1 ? "record" : "records"
-                            }}
-                        </p>
-
-                        <!-- Current Lease -->
-                        <div class="history-current">
-                            <div class="history-badge history-badge-current">
-                                Current Lease
-                            </div>
-                            <div class="history-row">
-                                <div class="history-dates">
-                                    <span>{{
-                                        formatDate(detailsTarget.lease_start)
-                                    }}</span>
-                                    <i class="bi bi-arrow-right"></i>
-                                    <span>{{
-                                        formatDate(detailsTarget.lease_end)
-                                    }}</span>
-                                </div>
-                                <span
-                                    class="status-chip"
-                                    :class="leaseStatusClass(detailsTarget)"
-                                    style="font-size: 0.7rem"
-                                >
-                                    <i
-                                        class="bi"
-                                        :class="leaseStatusIcon(detailsTarget)"
-                                    ></i>
-                                    {{ leaseStatusLabel(detailsTarget) }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <!-- History Timeline -->
-                        <div
-                            v-if="leaseHistory.length > 0"
-                            class="history-timeline"
-                        >
-                            <div
-                                v-for="(h, i) in leaseHistory"
-                                :key="h.id"
-                                class="history-item"
-                            >
-                                <div class="history-connector">
-                                    <div class="history-dot"></div>
-                                    <div
-                                        v-if="i < leaseHistory.length - 1"
-                                        class="history-line"
-                                    ></div>
-                                </div>
-                                <div class="history-content">
-                                    <div class="history-dates">
-                                        <span>{{
-                                            formatDate(h.start_date)
-                                        }}</span>
-                                        <i class="bi bi-arrow-right"></i>
-                                        <span>{{
-                                            formatDate(h.end_date)
-                                        }}</span>
-                                    </div>
-                                    <span
-                                        v-if="h.cost"
-                                        class="cost-chip cost-chip-muted"
-                                        style="font-size: 0.75rem"
-                                    >
-                                        {{ formatCurrency(h.cost) }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div
-                            v-else
-                            class="empty-state-inline"
-                            style="margin-top: 12px"
-                        >
-                            <i class="bi bi-journal-text"></i>
-                            <span>No previous lease records</span>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button
-                            type="button"
-                            class="btn-modal btn-modal-cancel"
-                            data-bs-dismiss="modal"
-                        >
-                            Close
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Delete Confirmation Modal -->
+        <!-- ══════════ DELETE MODAL ══════════ -->
         <div
             class="modal fade"
             id="deleteModal"
@@ -692,47 +608,15 @@
                         </div>
                         <h5 class="modal-title">Delete Plantation</h5>
                         <p class="modal-desc">
-                            Remove
-                            <strong>{{ deleteTarget?.name }}</strong
-                            >?
+                            Remove <strong>{{ deleteTarget?.name }}</strong>? This will also delete all lease history.
                         </p>
-                        <div
-                            v-if="deleteHasHistory"
-                            class="alert-missing-category"
-                            style="margin-top: 14px"
-                        >
-                            <i class="bi bi-exclamation-triangle-fill"></i>
-                            <div>
-                                This plantation has
-                                <strong>{{ deleteHistoryCount }}</strong>
-                                lease history
-                                {{
-                                    deleteHistoryCount === 1
-                                        ? "record"
-                                        : "records"
-                                }}. Deleting will permanently remove all
-                                history.
-                            </div>
-                        </div>
                     </div>
                     <div class="modal-footer">
-                        <button
-                            type="button"
-                            class="btn-modal btn-modal-cancel"
-                            data-bs-dismiss="modal"
-                        >
+                        <button type="button" class="btn-modal btn-modal-cancel" data-bs-dismiss="modal">
                             Cancel
                         </button>
-                        <button
-                            type="button"
-                            class="btn-modal btn-modal-confirm btn-modal-danger"
-                            @click="confirmDelete"
-                        >
-                            {{
-                                deleteHasHistory
-                                    ? "Delete With History"
-                                    : "Delete"
-                            }}
+                        <button type="button" class="btn-modal btn-modal-danger" @click="confirmDelete">
+                            Delete
                         </button>
                     </div>
                 </div>
@@ -744,451 +628,324 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Modal } from "bootstrap";
-import { useAuthStore } from "@/stores/auth";
+import { useAuthStore } from "../stores/auth";
 import api from "../utils/api";
 
-// ── Auth ────────────────────────────────────────────
 const auth = useAuthStore();
 const isAdmin = computed(() => auth.userRoles?.includes("admin"));
 
-// ── Reactive State ──────────────────────────────────
+// ── Data ─────────────────────────────────────────────────────────────────────
 const plantations = ref([]);
-const expenseCategories = ref([]);
-const plantationExpenses = ref([]);
+const loading = ref(false);
+const haToAcRate = ref(2.47105);
 
-const formModalRef = ref(null);
-const deleteModalRef = ref(null);
-const leaseCostModalRef = ref(null);
-const detailsModalRef = ref(null);
-let bsFormModal = null;
-let bsDeleteModal = null;
-let bsLeaseCostModal = null;
-let bsDetailsModal = null;
-
-// Lease cost modal state
-const leaseCostTarget = ref(null);
-const leaseCostAmount = ref(null);
-
-const leaseCostCategoryId = computed(() => {
-    const cat = expenseCategories.value.find(
-        (c) => c.name.toLowerCase() === "lease cost",
-    );
-    return cat?.id || null;
-});
-
-// Form state
-const isEditing = ref(false);
-const editingId = ref(null);
-const editingPlantation = ref(null);
-const deleteTarget = ref(null);
-const deleteHasHistory = ref(false);
-const deleteHistoryCount = ref(0);
-
-// Details modal state
-const detailsTarget = ref(null);
-const leaseHistory = ref([]);
-
-const form = ref(getEmptyForm());
-
-// Location search state
-const locationQuery = ref("");
-const locationPredictions = ref([]);
-const locationSearching = ref(false);
-const showPredictions = ref(false);
-let locationSearchTimer = null;
-
-function getEmptyForm() {
-    return {
-        name: "",
-        lease_start: "",
-        lease_end: "",
-        location: null,
-    };
-}
-
-const isFormValid = computed(() => {
-    return (
-        form.value.name.trim() !== "" &&
-        form.value.lease_start !== "" &&
-        form.value.lease_end !== ""
-    );
-});
-
-// ── Tab State ───────────────────────────────────────
 const activeTab = ref("active");
 
-// ── Computed: Split Active / Expired ────────────────
+const activePlantations = computed(() => plantations.value.filter((p) => p.is_active));
 
-const activePlantations = computed(() => {
-    const now = new Date();
-    return plantations.value.filter((p) => new Date(p.lease_end) >= now);
-});
-
-const expiredPlantations = computed(() => {
-    const now = new Date();
-    return plantations.value.filter((p) => new Date(p.lease_end) < now);
-});
-
-const currentPlantations = computed(() => {
-    return activeTab.value === "active"
-        ? activePlantations.value
-        : expiredPlantations.value;
-});
-
-// ── Helpers ─────────────────────────────────────────
-
-function formatCurrency(amount) {
-    if (amount == null) return "—";
-    return `₹${Number(amount).toLocaleString("en-IN", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    })}`;
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+async function fetchAll() {
+    loading.value = true;
+    try {
+        const [pRes, rateRes] = await Promise.allSettled([
+            api.get("/plantations/"),
+            api.get("/settings/app-config/hectares_to_acres_rate"),
+        ]);
+        if (pRes.status === "fulfilled") plantations.value = pRes.value.data;
+        if (rateRes.status === "fulfilled")
+            haToAcRate.value = parseFloat(rateRes.value.data.value) || 2.47105;
+    } finally {
+        loading.value = false;
+    }
 }
 
-function getLeaseExpense(plantationId) {
-    return plantationExpenses.value.find(
-        (e) =>
-            e.plantation_id === plantationId &&
-            e.category?.name?.toLowerCase() === "lease cost",
-    );
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatHa(ha) {
+    if (ha == null) return "—";
+    const acres = (parseFloat(ha) * haToAcRate.value).toFixed(2);
+    return `${parseFloat(ha).toFixed(2)} ha / ${acres} ac`;
 }
 
-function formatDate(dateStr) {
-    if (!dateStr) return "—";
-    const d = new Date(dateStr);
-    return d.toLocaleDateString("en-IN", {
+function latestLease(p) {
+    return p.lease?.[0] ?? null;
+}
+
+function formatDate(d) {
+    if (!d) return "—";
+    return new Date(d).toLocaleDateString("en-IN", {
         day: "2-digit",
         month: "short",
         year: "numeric",
     });
 }
 
-function toISODate(dateStr) {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    return d.toISOString().split("T")[0];
+function formatDateTime(d) {
+    if (!d) return "—";
+    return new Date(d).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 }
 
-function isExpired(p) {
-    if (!p) return false;
-    return new Date(p.lease_end) < new Date();
+function formatHour(isoString) {
+    if (!isoString) return "";
+    return new Date(isoString).toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    });
 }
 
-function leaseStatusClass(p) {
-    const now = new Date();
-    const end = new Date(p.lease_end);
-    const start = new Date(p.lease_start);
-    if (now < start) return "status-upcoming";
-    if (now > end) return "status-expired";
-    const daysLeft = (end - now) / (1000 * 60 * 60 * 24);
-    if (daysLeft <= 90) return "status-expiring";
-    return "status-active";
+function formatCurrency(v) {
+    if (v == null) return "—";
+    return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: "INR",
+        maximumFractionDigits: 0,
+    }).format(v);
 }
 
-function leaseStatusIcon(p) {
-    const cls = leaseStatusClass(p);
-    if (cls === "status-active") return "bi-check-circle-fill";
-    if (cls === "status-expiring") return "bi-exclamation-triangle-fill";
-    if (cls === "status-expired") return "bi-x-circle-fill";
-    return "bi-clock-fill";
+// ── Detail Modal ──────────────────────────────────────────────────────────────
+const detailModalRef = ref(null);
+let bsDetailModal = null;
+const selectedPlantation = ref(null);
+const weatherData = ref(null);
+const weatherLoading = ref(false);
+const weatherError = ref(null);
+const showAddLease = ref(false);
+const leaseForm = ref({ start_date: "", end_date: "", cost: "" });
+const leaseSaving = ref(false);
+
+async function openDetailsModal(p) {
+    selectedPlantation.value = p;
+    weatherData.value = null;
+    weatherError.value = null;
+    showAddLease.value = false;
+    leaseForm.value = { start_date: "", end_date: "", cost: "" };
+    if (!bsDetailModal) bsDetailModal = new Modal(detailModalRef.value);
+    bsDetailModal.show();
+    if (p.location_id) await loadWeather(p.id, false);
 }
 
-function leaseStatusLabel(p) {
-    const cls = leaseStatusClass(p);
-    if (cls === "status-active") return "Active";
-    if (cls === "status-expiring") return "Expiring Soon";
-    if (cls === "status-expired") return "Expired";
-    return "Upcoming";
-}
-
-// ── Location Search ─────────────────────────────────
-
-function onLocationSearch() {
-    const q = locationQuery.value.trim();
-    if (q.length < 2) {
-        locationPredictions.value = [];
-        showPredictions.value = false;
-        return;
-    }
-    clearTimeout(locationSearchTimer);
-    locationSearchTimer = setTimeout(() => fetchLocationPredictions(q), 300);
-}
-
-async function fetchLocationPredictions(query) {
-    locationSearching.value = true;
+async function loadWeather(plantationId, isManual) {
+    weatherLoading.value = true;
+    weatherError.value = null;
     try {
-        const res = await api.get("/api/weather/search-locations", {
-            params: { query },
-        });
-        locationPredictions.value = res.data.predictions || [];
-        showPredictions.value = locationPredictions.value.length > 0;
+        const url = `/plantations/${plantationId}/weather${isManual ? "/refresh" : ""}`;
+        const method = isManual ? "post" : "get";
+        const res = await api[method](url);
+        weatherData.value = res.data;
     } catch (e) {
-        console.error("Location search failed:", e);
-        locationPredictions.value = [];
+        weatherError.value =
+            e.response?.data?.detail || "Could not load weather data.";
     } finally {
-        locationSearching.value = false;
+        weatherLoading.value = false;
     }
 }
 
-async function selectPrediction(pred) {
-    showPredictions.value = false;
-    locationQuery.value = "";
-    locationPredictions.value = [];
-    locationSearching.value = true;
-
+async function submitAddLease() {
+    if (!leaseForm.value.start_date) return;
+    leaseSaving.value = true;
     try {
-        const res = await api.get("/api/weather/place-details", {
-            params: { place_id: pred.place_id },
-        });
-        const details = res.data;
-        const components = details.address_components || [];
-
-        let city = details.name || pred.main_text;
-        let state = null;
-        let country = null;
-
-        for (const c of components) {
-            if (c.types.includes("administrative_area_level_1"))
-                state = c.long_name;
-            if (c.types.includes("country")) country = c.long_name;
-        }
-
-        form.value.location = {
-            city,
-            state,
-            country,
-            latitude: details.latitude,
-            longitude: details.longitude,
+        const payload = {
+            start_date: leaseForm.value.start_date,
+            end_date: leaseForm.value.end_date || null,
+            cost: leaseForm.value.cost ? parseFloat(leaseForm.value.cost) : null,
         };
+        await api.post(`/plantations/${selectedPlantation.value.id}/leases`, payload);
+        // Refresh plantation list so lease history updates
+        await fetchAll();
+        selectedPlantation.value = plantations.value.find(
+            (p) => p.id === selectedPlantation.value.id
+        );
+        showAddLease.value = false;
+        leaseForm.value = { start_date: "", end_date: "", cost: "" };
     } catch (e) {
-        console.error("Place details fetch failed:", e);
+        console.error("Failed to add lease:", e);
     } finally {
-        locationSearching.value = false;
+        leaseSaving.value = false;
     }
 }
 
-function clearLocation() {
-    form.value.location = null;
-    locationQuery.value = "";
-    locationPredictions.value = [];
-}
+// ── Create / Edit Modal ───────────────────────────────────────────────────────
+const formModalRef = ref(null);
+let bsFormModal = null;
+const editingPlantation = ref(null);
+const form = ref({
+    name: "",
+    location_id: null,
+    area_hectares: "",
+    lease_start: "",
+    lease_end: "",
+    lease_cost: "",
+});
+const formLocationLabel = ref("");
+const locationResults = ref([]);
+const locationGoogleWasSearched = ref(false);
+let locationSearchTimer = null;
 
-function hidePredictionsDelayed() {
-    setTimeout(() => {
-        showPredictions.value = false;
-    }, 200);
-}
-
-// ── Modal Handlers ──────────────────────────────────
+const areaAcresHint = computed(() => {
+    const ha = parseFloat(form.value.area_hectares);
+    if (isNaN(ha) || ha <= 0) return "";
+    return `≈ ${(ha * haToAcRate.value).toFixed(2)} ac`;
+});
 
 function openAddModal() {
-    isEditing.value = false;
-    editingId.value = null;
     editingPlantation.value = null;
-    form.value = getEmptyForm();
-    locationQuery.value = "";
-    locationPredictions.value = [];
+    form.value = {
+        name: "",
+        location_id: null,
+        area_hectares: "",
+        lease_start: "",
+        lease_end: "",
+        lease_cost: "",
+    };
+    formLocationLabel.value = "";
+    locationResults.value = [];
+    locationGoogleWasSearched.value = false;
     if (!bsFormModal) bsFormModal = new Modal(formModalRef.value);
     bsFormModal.show();
 }
 
 function openEditModal(p) {
-    isEditing.value = true;
-    editingId.value = p.id;
     editingPlantation.value = p;
     form.value = {
         name: p.name,
-        lease_start: toISODate(p.lease_start),
-        lease_end: toISODate(p.lease_end),
-        location: p.location ? { ...p.location } : null,
+        location_id: p.location_id,
+        area_hectares: p.area_hectares ?? "",
+        lease_start: "",
+        lease_end: "",
+        lease_cost: "",
     };
-    locationQuery.value = "";
-    locationPredictions.value = [];
+    formLocationLabel.value = p.location
+        ? `${p.location.city}${p.location.state ? ", " + p.location.state : ""}`
+        : "";
+    locationResults.value = [];
+    locationGoogleWasSearched.value = false;
     if (!bsFormModal) bsFormModal = new Modal(formModalRef.value);
     bsFormModal.show();
 }
 
-async function openDeleteModal(p) {
-    deleteTarget.value = p;
-    deleteHasHistory.value = false;
-    deleteHistoryCount.value = 0;
-
-    // Check for lease history
-    try {
-        const res = await api.get(`/plantations/${p.id}/delete-check`);
-        deleteHasHistory.value = res.data.has_history;
-        deleteHistoryCount.value = res.data.history_count;
-    } catch (error) {
-        console.error("Failed to check delete:", error);
+async function onLocationInput(e) {
+    const q = (e.target.value || "").trim();
+    formLocationLabel.value = q;
+    form.value.location_id = null;
+    locationGoogleWasSearched.value = false;
+    clearTimeout(locationSearchTimer);
+    if (q.length < 2) {
+        locationResults.value = [];
+        return;
     }
+    locationSearchTimer = setTimeout(async () => {
+        try {
+            const res = await api.get(
+                `/locations/search?q=${encodeURIComponent(q)}`
+            );
+            locationResults.value = (res.data.results || []).slice(0, 8);
+            locationGoogleWasSearched.value = res.data.google_searched || false;
+        } catch {
+            locationResults.value = [];
+        }
+    }, 300);
+}
 
+async function onLocationSearchOnline() {
+    const q = formLocationLabel.value.trim();
+    if (q.length < 2) return;
+    try {
+        const res = await api.get(
+            `/locations/search?q=${encodeURIComponent(q)}&force_google=true`
+        );
+        locationResults.value = (res.data.results || []).slice(0, 8);
+        locationGoogleWasSearched.value = true;
+    } catch {
+        locationResults.value = [];
+    }
+}
+
+async function selectLocation(loc) {
+    if (loc.source === "db") {
+        form.value.location_id = loc.id;
+        formLocationLabel.value = `${loc.city}${loc.state ? ", " + loc.state : ""}`;
+    } else {
+        try {
+            const res = await api.post(
+                `/locations/resolve?place_id=${encodeURIComponent(loc.place_id)}`
+            );
+            form.value.location_id = res.data.id;
+            formLocationLabel.value = `${res.data.city}${res.data.state ? ", " + res.data.state : ""}`;
+        } catch (e) {
+            console.error("Failed to resolve location:", e);
+        }
+    }
+    locationResults.value = [];
+}
+
+async function submitForm() {
+    if (!form.value.name.trim()) return;
+    const payload = {
+        name: form.value.name.trim(),
+        location_id: form.value.location_id,
+        area_hectares: form.value.area_hectares
+            ? parseFloat(form.value.area_hectares)
+            : null,
+        lease_start: form.value.lease_start || null,
+        lease_end: form.value.lease_end || null,
+        lease_cost: form.value.lease_cost
+            ? parseFloat(form.value.lease_cost)
+            : null,
+    };
+    try {
+        if (editingPlantation.value) {
+            await api.put(`/plantations/${editingPlantation.value.id}`, payload);
+        } else {
+            await api.post("/plantations/", payload);
+        }
+        await fetchAll();
+        bsFormModal?.hide();
+    } catch (e) {
+        console.error("Failed to save plantation:", e);
+    }
+}
+
+// ── Delete Modal ──────────────────────────────────────────────────────────────
+const deleteModalRef = ref(null);
+let bsDeleteModal = null;
+const deleteTarget = ref(null);
+
+function openDeleteModal(p) {
+    deleteTarget.value = p;
     if (!bsDeleteModal) bsDeleteModal = new Modal(deleteModalRef.value);
     bsDeleteModal.show();
 }
 
-async function openDetailsModal(p) {
-    detailsTarget.value = p;
-    leaseHistory.value = [];
-    if (!bsDetailsModal) bsDetailsModal = new Modal(detailsModalRef.value);
-    bsDetailsModal.show();
-
-    try {
-        const res = await api.get(`/plantations/${p.id}/lease-history`);
-        leaseHistory.value = res.data;
-    } catch (error) {
-        console.error("Failed to fetch lease history:", error);
-    }
-}
-
-// ── Lease Cost Modal ────────────────────────────────
-
-function openLeaseCostModal(p) {
-    leaseCostTarget.value = p;
-    leaseCostAmount.value = null;
-    if (!bsLeaseCostModal)
-        bsLeaseCostModal = new Modal(leaseCostModalRef.value);
-    bsLeaseCostModal.show();
-}
-
-async function submitLeaseCost() {
-    if (
-        !leaseCostTarget.value ||
-        !leaseCostAmount.value ||
-        !leaseCostCategoryId.value
-    )
-        return;
-
-    const payload = {
-        date: new Date(leaseCostTarget.value.lease_start).toISOString(),
-        amount: leaseCostAmount.value,
-        category_id: leaseCostCategoryId.value,
-        plantation_id: leaseCostTarget.value.id,
-        description: `Lease cost for ${leaseCostTarget.value.name}`,
-    };
-
-    try {
-        const response = await api.post("/expenses/", payload);
-        plantationExpenses.value.push(response.data);
-        bsLeaseCostModal.hide();
-    } catch (error) {
-        console.error("Failed to add lease cost:", error);
-    }
-}
-
-// ── API Functions ───────────────────────────────────
-
-async function fetchExpenseCategories() {
-    try {
-        const response = await api.get("/settings/expense-categories");
-        expenseCategories.value = response.data;
-    } catch (error) {
-        console.error("Failed to fetch expense categories:", error);
-    }
-}
-
-async function fetchAllExpenses() {
-    try {
-        const response = await api.get("/expenses/");
-        plantationExpenses.value = response.data;
-    } catch (error) {
-        console.error("Failed to fetch expenses:", error);
-    }
-}
-
-async function fetchPlantations() {
-    try {
-        const response = await api.get("/plantations/");
-        plantations.value = response.data;
-        console.log(plantations.value);
-    } catch (error) {
-        console.error("Failed to fetch plantations:", error);
-    }
-}
-
-async function handleFormSubmit() {
-    if (!isFormValid.value) return;
-
-    const payload = {
-        name: form.value.name,
-        lease_start: new Date(form.value.lease_start).toISOString(),
-        lease_end: new Date(form.value.lease_end).toISOString(),
-    };
-
-    if (form.value.location) {
-        payload.location = {
-            city: form.value.location.city,
-            state: form.value.location.state || null,
-            country: form.value.location.country || null,
-            latitude: form.value.location.latitude,
-            longitude: form.value.location.longitude,
-        };
-    }
-
-    if (isEditing.value) {
-        await updatePlantation(editingId.value, payload);
-    } else {
-        await addPlantation(payload);
-    }
-    bsFormModal.hide();
-}
-
-async function addPlantation(data) {
-    try {
-        const response = await api.post("/plantations/", data);
-        plantations.value.push(response.data);
-    } catch (error) {
-        console.error("Failed to add plantation:", error);
-    }
-}
-
-async function updatePlantation(id, data) {
-    try {
-        const response = await api.put(`/plantations/${id}`, data);
-        const idx = plantations.value.findIndex((p) => p.id === id);
-        if (idx !== -1) plantations.value[idx] = response.data;
-    } catch (error) {
-        console.error("Failed to update plantation:", error);
-    }
-}
-
 async function confirmDelete() {
     if (!deleteTarget.value) return;
-    await deletePlantation(deleteTarget.value.id, deleteHasHistory.value);
-    bsDeleteModal.hide();
-}
-
-async function deletePlantation(id, force = false) {
     try {
-        const url = force
-            ? `/plantations/${id}?force=true`
-            : `/plantations/${id}`;
-        await api.delete(url);
-        plantations.value = plantations.value.filter((p) => p.id !== id);
-    } catch (error) {
-        console.error("Failed to delete plantation:", error);
+        await api.delete(`/plantations/${deleteTarget.value.id}?force=true`);
+        plantations.value = plantations.value.filter(
+            (p) => p.id !== deleteTarget.value.id
+        );
+    } catch (e) {
+        console.error("Delete failed:", e);
     }
+    bsDeleteModal?.hide();
 }
 
-// ── Lifecycle ───────────────────────────────────────
-
-onMounted(async () => {
-    await Promise.all([
-        fetchPlantations(),
-        fetchExpenseCategories(),
-        fetchAllExpenses(),
-    ]);
-});
+// ── Lifecycle ─────────────────────────────────────────────────────────────────
+onMounted(fetchAll);
 
 onBeforeUnmount(() => {
+    bsDetailModal?.dispose();
     bsFormModal?.dispose();
     bsDeleteModal?.dispose();
-    bsLeaseCostModal?.dispose();
-    bsDetailsModal?.dispose();
 });
 </script>
 
 <style scoped>
-/* ── Page Layout ────────────────────────────── */
+/* ── Page Layout ────────────────────────────────── */
 .plantations-page {
     max-width: 100vw;
 }
@@ -1197,7 +954,7 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
     gap: 16px;
 }
 
@@ -1212,43 +969,14 @@ onBeforeUnmount(() => {
     font-size: 0.85rem;
     color: var(--text-secondary);
     margin: 0;
-    letter-spacing: 0.01em;
 }
 
-.btn-add {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 9px 18px;
-    border: none;
-    border-radius: 10px;
-    background: var(--moss);
-    color: var(--white);
-    font-family: var(--font-body);
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-}
 
-.btn-add:hover {
-    background: var(--moss-light);
-    box-shadow: 0 4px 12px var(--moss-faded);
-}
-
-.btn-add i {
-    font-size: 1rem;
-}
-
-/* ── Tab Bar ────────────────────────────────── */
+/* ── Tab Bar ────────────────────────────────────── */
 .tab-bar {
     display: flex;
     gap: 6px;
     margin-bottom: 20px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    padding-bottom: 2px;
 }
 
 .tab-btn {
@@ -1266,7 +994,6 @@ onBeforeUnmount(() => {
     cursor: pointer;
     transition: all var(--transition-fast);
     white-space: nowrap;
-    flex-shrink: 0;
 }
 
 .tab-btn:hover {
@@ -1283,7 +1010,7 @@ onBeforeUnmount(() => {
 }
 
 .tab-btn i {
-    font-size: 1rem;
+    font-size: 0.95rem;
 }
 
 .tab-label {
@@ -1306,125 +1033,145 @@ onBeforeUnmount(() => {
 }
 
 .tab-btn.active .tab-count {
-    background: var(--moss-faded);
+    background: rgba(74, 103, 65, 0.15);
     color: var(--moss);
 }
 
-/* ── Table ──────────────────────────────────── */
-.table-wrapper {
+/* ── Add Button ─────────────────────────────────── */
+.btn-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 18px;
+    border: none;
+    border-radius: 10px;
+    background: var(--moss);
+    color: var(--white);
+    font-family: var(--font-body);
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.btn-add:hover {
+    background: var(--moss-light);
+    box-shadow: 0 4px 12px var(--moss-faded);
+}
+
+/* ── Cards Grid ─────────────────────────────────── */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+/* ── Plantation Card ────────────────────────────── */
+.plantation-card {
     background: var(--bg-card);
     border: 1px solid var(--border-light);
     border-radius: 14px;
-    overflow: hidden;
     box-shadow: var(--shadow-sm);
+    padding: 16px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }
 
-.table-expired {
-    opacity: 0.85;
+.plantation-card:hover {
+    border-color: var(--sage);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
 }
 
-.table-scroll {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+.plantation-card-inactive {
+    opacity: 0.72;
 }
 
-.data-table {
-    width: 100%;
-    min-width: 750px;
-    border-collapse: collapse;
+.plantation-card-inactive:hover {
+    opacity: 1;
 }
 
-.data-table thead th {
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-secondary);
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border-light);
-    background: var(--parchment-deep);
-    text-align: left;
-    white-space: nowrap;
-}
-
-.th-actions {
-    text-align: right !important;
-    padding-right: 22px !important;
-}
-
-.data-table tbody tr {
-    transition: background var(--transition-fast);
-}
-
-.data-table tbody tr:hover {
-    background: rgba(138, 154, 123, 0.06);
-}
-
-.data-table tbody td {
-    padding: 12px 18px;
-    border-bottom: 1px solid var(--border-light);
-    vertical-align: middle;
-    font-size: 0.88rem;
-}
-
-.data-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-/* ── Plantation Identity ─────────────────────── */
-.plantation-identity {
+.card-top {
     display: flex;
     align-items: center;
-    gap: 12px;
+    justify-content: space-between;
+    gap: 8px;
 }
 
-.plantation-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    background: var(--moss-faded);
-    color: var(--moss);
-    font-size: 1rem;
+.card-identity {
     display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: rgba(74, 103, 65, 0.1);
+    color: var(--moss);
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    font-size: 0.95rem;
     flex-shrink: 0;
 }
 
-.plantation-icon-expired {
-    background: rgba(181, 105, 77, 0.1);
-    color: var(--sienna);
+.card-icon-inactive {
+    background: var(--border-light);
+    color: var(--text-secondary);
 }
 
-.plantation-name {
+.card-name {
     font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.92rem;
     color: var(--text-primary);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* ── Date Cells ──────────────────────────────── */
-.date-cell {
-    font-variant-numeric: tabular-nums;
+.card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    font-size: 0.82rem;
     color: var(--text-secondary);
-    font-size: 0.85rem;
 }
 
-/* ── Status Chips ────────────────────────────── */
+.card-location,
+.card-area,
+.card-lease {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.card-location i,
+.card-area i,
+.card-lease i {
+    font-size: 0.8rem;
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
+/* ── Status Chips ───────────────────────────────── */
 .status-chip {
     display: inline-flex;
     align-items: center;
     gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
     font-size: 0.75rem;
     font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 20px;
-    letter-spacing: 0.01em;
     white-space: nowrap;
-}
-
-.status-chip i {
-    font-size: 0.7rem;
+    flex-shrink: 0;
 }
 
 .status-active {
@@ -1432,128 +1179,31 @@ onBeforeUnmount(() => {
     color: var(--moss);
 }
 
-.status-expiring {
-    background: rgba(196, 163, 90, 0.14);
-    color: #8a6f2a;
+.status-active i {
+    font-size: 0.5rem;
 }
 
-.status-expired {
-    background: rgba(181, 105, 77, 0.1);
-    color: var(--sienna);
-}
-
-.status-upcoming {
-    background: rgba(138, 154, 123, 0.14);
-    color: var(--sage);
-}
-
-/* ── Lease Cost ──────────────────────────────── */
-.cost-chip {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.82rem;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 20px;
-    background: rgba(74, 103, 65, 0.1);
-    color: var(--moss);
-    font-variant-numeric: tabular-nums;
-}
-
-.cost-chip-muted {
-    background: rgba(107, 109, 107, 0.1);
+.status-inactive {
+    background: var(--border-light);
     color: var(--text-secondary);
 }
 
-.btn-lease-cost {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border: 1.5px dashed var(--border);
-    border-radius: 20px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.78rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    font-family: var(--font-body);
-}
-
-.btn-lease-cost:hover {
-    border-color: var(--moss);
-    color: var(--moss);
-    background: rgba(74, 103, 65, 0.04);
-}
-
-.btn-lease-cost i {
-    font-size: 0.8rem;
-}
-
-.btn-lease-cost-sm {
-    padding: 2px 8px;
-    font-size: 0.72rem;
-    margin-top: 2px;
-}
-
-.icon-lease {
-    background: rgba(196, 163, 90, 0.12);
-    color: #8a6f2a;
-}
-
-.icon-history {
-    background: rgba(138, 154, 123, 0.14);
-    color: var(--sage);
-}
-
-.alert-missing-category {
+/* ── Card Actions ───────────────────────────────── */
+.card-actions {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 14px 16px;
-    border-radius: 10px;
-    background: rgba(181, 105, 77, 0.08);
-    border: 1px solid rgba(181, 105, 77, 0.2);
-    font-size: 0.84rem;
-    color: var(--text-primary);
-    line-height: 1.5;
-    text-align: left;
-}
-
-.alert-missing-category i {
-    color: var(--sienna);
-    font-size: 1.1rem;
-    flex-shrink: 0;
-    margin-top: 1px;
-}
-
-.alert-missing-category a {
-    color: var(--moss);
-    font-weight: 600;
-    text-decoration: underline;
-}
-
-/* ── Action Buttons ──────────────────────────── */
-.action-group {
-    display: flex;
-    align-items: center;
     gap: 6px;
-    justify-content: flex-end;
-}
-
-.action-group-mobile {
-    justify-content: flex-start;
+    padding-top: 6px;
+    border-top: 1px solid var(--border-light);
 }
 
 .btn-action {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
     border: 1.5px solid var(--border);
     background: transparent;
     color: var(--text-secondary);
-    font-size: 1rem;
+    font-size: 0.85rem;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
@@ -1561,252 +1211,593 @@ onBeforeUnmount(() => {
     transition: all var(--transition-fast);
 }
 
-.btn-action:hover:not(:disabled) {
-    border-color: var(--moss);
-    color: var(--moss);
-    background: rgba(74, 103, 65, 0.06);
-}
-
-.btn-details:hover:not(:disabled) {
+.btn-details:hover {
     border-color: var(--sage);
     color: var(--sage);
     background: rgba(138, 154, 123, 0.08);
 }
 
-.btn-edit:hover:not(:disabled) {
+.btn-edit:hover {
     border-color: var(--harvest);
     color: #8a6f2a;
     background: rgba(196, 163, 90, 0.08);
 }
 
-.btn-delete:hover:not(:disabled) {
+.btn-delete:hover {
     border-color: var(--sienna);
     color: var(--sienna);
     background: rgba(181, 105, 77, 0.06);
 }
 
-/* ── Mobile Cards ────────────────────────────── */
-.plantation-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border-light);
-    border-radius: 14px;
-    margin-bottom: 12px;
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
-}
-
-.plantation-card-expired {
-    opacity: 0.85;
-}
-
-.plantation-card-header {
-    padding: 16px 16px 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-}
-
-.plantation-card-body {
-    padding: 12px 16px 16px;
-}
-
-.lease-dates {
-    display: flex;
-    gap: 20px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-}
-
-.lease-date-item {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.lease-label {
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-secondary);
-}
-
-.lease-value {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-}
-
-.plantation-card .btn-action {
-    width: auto;
-    height: auto;
-    padding: 7px 14px;
-    font-size: 0.8rem;
-    gap: 6px;
-    font-weight: 500;
-}
-
-/* ── Empty State ────────────────────────────── */
+/* ── Empty State ────────────────────────────────── */
 .empty-state {
     text-align: center;
-    padding: 48px 20px;
+    padding: 36px 20px;
     color: var(--text-secondary);
+    background: var(--bg-card);
+    border: 1px dashed var(--border);
+    border-radius: 14px;
 }
 
 .empty-state i {
-    font-size: 2.4rem;
-    opacity: 0.3;
+    font-size: 2.2rem;
+    opacity: 0.25;
     margin-bottom: 10px;
     display: block;
 }
 
 .empty-state p {
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     margin: 0;
 }
 
-/* ── History Timeline ────────────────────────── */
-.history-current {
-    background: rgba(74, 103, 65, 0.06);
-    border: 1px solid rgba(74, 103, 65, 0.15);
-    border-radius: 10px;
-    padding: 12px 16px;
-    text-align: left;
+/* ── Detail Modal ───────────────────────────────── */
+.detail-modal-content {
+    border: none;
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-card);
+    overflow: hidden;
 }
 
-.history-badge {
-    font-size: 0.68rem;
+.detail-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--parchment-deep);
+}
+
+.detail-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.detail-modal-title .modal-title {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.btn-close-modal {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.btn-close-modal:hover {
+    background: var(--border-light);
+    color: var(--text-primary);
+}
+
+.detail-modal-body {
+    padding: 20px 22px;
+}
+
+.detail-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+@media (max-width: 767.98px) {
+    .detail-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+.detail-section {
+    margin-bottom: 20px;
+}
+
+.detail-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.detail-section-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.88rem;
     font-weight: 700;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: 6px;
+    margin: 0;
 }
 
-.history-badge-current {
+.detail-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.detail-info-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.85rem;
+}
+
+.detail-info-label {
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.detail-info-value {
+    color: var(--text-primary);
+    font-weight: 500;
+    text-align: right;
+}
+
+/* ── Small action button ────────────────────────── */
+.btn-sm-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-body);
+}
+
+.btn-sm-action:hover:not(:disabled) {
+    border-color: var(--moss);
     color: var(--moss);
+    background: rgba(74, 103, 65, 0.06);
 }
 
-.history-row {
+.btn-sm-action:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-sm-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 8px;
+    background: var(--moss);
+    color: var(--white);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-body);
+}
+
+.btn-sm-primary:hover:not(:disabled) {
+    background: var(--moss-light);
+}
+
+.btn-sm-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.btn-sm-cancel {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font-body);
+}
+
+/* ── Add Lease Form ─────────────────────────────── */
+.add-lease-form {
+    background: rgba(196, 163, 90, 0.05);
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+}
+
+.add-lease-form .form-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+/* ── Lease List ─────────────────────────────────── */
+.lease-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lease-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+    padding: 8px 12px;
+    background: var(--parchment-deep);
+    border-radius: 8px;
+    font-size: 0.82rem;
 }
 
-.history-dates {
+.lease-dates-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+}
+
+.lease-arrow {
+    opacity: 0.5;
+}
+
+.lease-cost-badge {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--moss);
+    background: rgba(74, 103, 65, 0.08);
+    padding: 2px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+}
+
+.lease-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    padding: 8px 0;
+}
+
+/* ── Weather Panel ──────────────────────────────── */
+.weather-panel {
+    background: var(--parchment-deep);
+    border-radius: 12px;
+    padding: 14px;
+}
+
+.weather-loading,
+.weather-error,
+.weather-no-location,
+.weather-no-data {
     display: flex;
     align-items: center;
     gap: 8px;
     font-size: 0.84rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+    padding: 12px 0;
 }
 
-.history-dates i {
-    font-size: 0.7rem;
+.weather-error {
+    color: var(--sienna);
+}
+
+.weather-no-location,
+.weather-no-data {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px 0;
+}
+
+.weather-no-location i,
+.weather-no-data i {
+    font-size: 1.8rem;
+    opacity: 0.3;
+}
+
+.weather-no-location p,
+.weather-no-data p {
+    margin: 0;
+    font-size: 0.82rem;
+}
+
+.weather-current {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+}
+
+.weather-temp-block {
+    display: flex;
+    align-items: baseline;
+    gap: 3px;
+}
+
+.weather-temp {
+    font-family: var(--font-display);
+    font-size: 2.4rem;
+    color: var(--text-primary);
+    line-height: 1;
+}
+
+.weather-unit {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    align-self: flex-start;
+    margin-top: 4px;
+}
+
+.weather-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.weather-condition {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.weather-details {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    font-size: 0.8rem;
     color: var(--text-secondary);
 }
 
-.history-timeline {
-    margin-top: 16px;
-    text-align: left;
+.weather-details i {
+    margin-right: 2px;
 }
 
-.history-item {
+.weather-fetched-at {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
     display: flex;
-    gap: 14px;
-    min-height: 48px;
+    align-items: center;
+    gap: 5px;
 }
 
-.history-connector {
+.badge-manual {
+    background: rgba(196, 163, 90, 0.15);
+    color: #8a6f2a;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.hourly-section {
+    border-top: 1px solid var(--border-light);
+    padding-top: 10px;
+}
+
+.hourly-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+
+.hourly-strip {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.hourly-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 16px;
-    flex-shrink: 0;
-}
-
-.history-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--border);
-    flex-shrink: 0;
-    margin-top: 6px;
-}
-
-.history-line {
-    width: 2px;
-    flex: 1;
-    background: var(--border-light);
-    margin: 4px 0;
-}
-
-.history-content {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    flex: 1;
-    padding-bottom: 14px;
-    border-bottom: 1px solid var(--border-light);
-}
-
-.history-item:last-child .history-content {
-    border-bottom: none;
-    padding-bottom: 0;
-}
-
-/* ── Form Modal ──────────────────────────────── */
-.form-modal {
-    border: none;
-    border-radius: 16px;
-    box-shadow: var(--shadow-lg);
-    overflow: hidden;
+    gap: 3px;
+    min-width: 52px;
+    padding: 8px 6px;
     background: var(--bg-card);
-}
-
-.form-modal .modal-body {
-    padding: 28px 24px 8px;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
     text-align: center;
 }
 
-.plantation-form {
-    text-align: left;
-    margin-top: 20px;
+.hourly-time {
+    font-size: 0.7rem;
+    opacity: 0.7;
 }
 
-.form-group {
-    margin-bottom: 16px;
+.hourly-temp {
+    font-weight: 700;
+    font-size: 0.88rem;
+    color: var(--text-primary);
 }
 
-.form-row {
-    display: flex;
-    gap: 12px;
+.hourly-cond {
+    font-size: 0.65rem;
+    line-height: 1.2;
+    opacity: 0.7;
+    max-width: 50px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.flex-1 {
-    flex: 1;
+.spin {
+    animation: spin 1s linear infinite;
 }
 
-.modal-hint {
-    font-size: 0.8rem;
-    color: var(--sage);
-    margin: 0;
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Form Modal ─────────────────────────────────── */
+.form-modal-content {
+    border: none;
+    border-radius: 16px;
+    box-shadow: var(--shadow-lg);
+    background: var(--bg-card);
+    overflow: hidden;
+}
+
+.form-modal-header {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 6px;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--parchment-deep);
 }
 
-.modal-hint i {
-    font-size: 0.85rem;
+.form-modal-header .modal-title {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    margin: 0;
 }
 
-/* ── Confirm / Delete Modal ──────────────────── */
+.form-modal-footer {
+    border-top: 1px solid var(--border-light);
+    padding: 12px 22px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.form-section-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+}
+
+/* ── Location Search ────────────────────────────── */
+.location-search-wrapper {
+    position: relative;
+}
+
+.location-results {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-md);
+    z-index: 1050;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.location-result-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    cursor: pointer;
+    font-size: 0.84rem;
+    border-bottom: 1px solid var(--border-light);
+    transition: background var(--transition-fast);
+}
+
+.location-result-item:last-child {
+    border-bottom: none;
+}
+
+.location-result-item:hover {
+    background: rgba(138, 154, 123, 0.07);
+}
+
+.location-result-source {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    margin-left: auto;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.location-search-online {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--moss);
+    border-top: 1px solid var(--border-light);
+    transition: background var(--transition-fast);
+}
+
+.location-search-online:hover {
+    background: rgba(138, 154, 123, 0.07);
+}
+
+/* ── Area Input ─────────────────────────────────── */
+.area-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.area-hint {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+/* ── Confirm / Delete Modal ─────────────────────── */
 .confirm-modal {
     border: none;
     border-radius: 16px;
@@ -1831,16 +1822,6 @@ onBeforeUnmount(() => {
     margin: 0 auto 16px;
 }
 
-.icon-add {
-    background: rgba(74, 103, 65, 0.1);
-    color: var(--moss);
-}
-
-.icon-edit {
-    background: rgba(196, 163, 90, 0.12);
-    color: #8a6f2a;
-}
-
 .icon-delete {
     background: rgba(181, 105, 77, 0.1);
     color: var(--sienna);
@@ -1848,20 +1829,18 @@ onBeforeUnmount(() => {
 
 .modal-title {
     font-family: var(--font-display);
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     margin: 0 0 8px;
     color: var(--text-primary);
 }
 
 .modal-desc {
-    font-size: 0.85rem;
+    font-size: 0.84rem;
     color: var(--text-secondary);
     margin: 0;
     line-height: 1.5;
 }
 
-/* ── Modal Footer ────────────────────────────── */
-.form-modal .modal-footer,
 .confirm-modal .modal-footer {
     border-top: 1px solid var(--border-light);
     padding: 12px 24px;
@@ -1870,6 +1849,7 @@ onBeforeUnmount(() => {
     justify-content: flex-end;
 }
 
+/* ── Modal Buttons ──────────────────────────────── */
 .btn-modal {
     border: none;
     border-radius: 9px;
@@ -1881,14 +1861,10 @@ onBeforeUnmount(() => {
     transition: all var(--transition-fast);
 }
 
-.btn-modal:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
 .btn-modal-cancel {
     background: transparent;
     color: var(--text-secondary);
+    border: 1.5px solid var(--border);
 }
 
 .btn-modal-cancel:hover {
@@ -1905,240 +1881,28 @@ onBeforeUnmount(() => {
     background: var(--moss-light);
 }
 
-.btn-modal-danger {
-    background: var(--sienna);
+.btn-modal-confirm:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
-.btn-modal-danger:hover:not(:disabled) {
+.btn-modal-danger {
+    background: var(--sienna);
+    color: var(--white);
+}
+
+.btn-modal-danger:hover {
     background: var(--sienna-light);
 }
 
-/* ── Location ────────────────────────────────── */
-.location-cell {
-    font-size: 0.84rem;
-    color: var(--text-secondary);
-}
-
-.location-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.location-text i {
-    font-size: 0.8rem;
-    color: var(--sage);
-}
-
-.card-location {
-    font-size: 0.78rem;
-    color: var(--text-secondary);
-    margin-bottom: 10px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.card-location i {
-    font-size: 0.8rem;
-    color: var(--sage);
-}
-
-/* Location search in form */
-.location-search-wrapper {
-    position: relative;
-}
-
-.location-search-input-wrap {
-    position: relative;
-}
-
-.location-search-icon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    pointer-events: none;
-}
-
-.location-search-input {
-    padding-left: 34px !important;
-    padding-right: 34px !important;
-}
-
-.location-spinner {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--sage);
-    font-size: 0.9rem;
-}
-
-.spin {
-    display: inline-block;
-    animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-.location-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 50;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    margin-top: 4px;
-    box-shadow: var(--shadow-md);
-    max-height: 220px;
-    overflow-y: auto;
-}
-
-.location-dropdown-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    width: 100%;
-    padding: 10px 14px;
-    border: none;
-    background: transparent;
-    text-align: left;
-    cursor: pointer;
-    transition: background var(--transition-fast);
-    font-family: var(--font-body);
-}
-
-.location-dropdown-item:hover {
-    background: rgba(138, 154, 123, 0.08);
-}
-
-.location-dropdown-item:not(:last-child) {
-    border-bottom: 1px solid var(--border-light);
-}
-
-.location-dropdown-item i {
-    color: var(--sage);
-    font-size: 0.95rem;
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
-.loc-main {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: var(--text-primary);
-}
-
-.loc-secondary {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    margin-top: 1px;
-}
-
-.location-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: 10px;
-    background: rgba(138, 154, 123, 0.1);
-    border: 1px solid rgba(138, 154, 123, 0.2);
-    font-size: 0.85rem;
-    color: var(--text-primary);
-}
-
-.location-chip i {
-    color: var(--sage);
-    font-size: 0.9rem;
-}
-
-.location-chip-clear {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border: none;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.08);
-    color: var(--text-secondary);
-    font-size: 0.65rem;
-    cursor: pointer;
-    padding: 0;
-    margin-left: 2px;
-    transition: all var(--transition-fast);
-}
-
-.location-chip-clear:hover {
-    background: rgba(181, 105, 77, 0.15);
-    color: var(--sienna);
-}
-
-/* ── Responsive ──────────────────────────────── */
-@media (max-width: 767.98px) {
-    .plantations-page {
-        max-width: 100%;
+/* ── Responsive ─────────────────────────────────── */
+@media (max-width: 575.98px) {
+    .cards-grid {
+        grid-template-columns: 1fr;
     }
 
     .page-title {
-        font-size: 1.35rem;
-    }
-
-    .page-header {
-        margin-bottom: 20px;
-    }
-
-    .btn-add {
-        padding: 8px 14px;
-        font-size: 0.8rem;
-    }
-
-    .btn-add span {
-        display: none;
-    }
-
-    .btn-add i {
-        font-size: 1.15rem;
-    }
-
-    .form-row {
-        flex-direction: column;
-        gap: 0;
-    }
-
-    .tab-bar {
-        gap: 4px;
-        margin-bottom: 16px;
-    }
-
-    .tab-btn {
-        padding: 8px 12px;
-        font-size: 0.78rem;
-        gap: 6px;
-    }
-
-    .tab-label {
-        display: none;
-    }
-
-    .tab-btn.active .tab-label {
-        display: inline;
-    }
-
-    .history-dates {
-        font-size: 0.78rem;
+        font-size: 1.3rem;
     }
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useWeatherStore } from "@/stores/weather";
 
 const weather = useWeatherStore();
@@ -7,153 +7,129 @@ const weather = useWeatherStore();
 const searchInput = ref(null);
 const showDropdown = ref(false);
 
+/* ── Search ─────────────────────────────────────────────────────────── */
+
 function onInput(e) {
     const val = e.target.value;
     weather.searchLocations(val);
     showDropdown.value = val.length >= 2;
 }
 
-function selectPrediction(prediction) {
-    showDropdown.value = false;
-    weather.selectLocation(prediction);
-}
-
 function onFocus() {
-    if (weather.predictions.length > 0) {
-        showDropdown.value = true;
-    }
+    if (weather.searchResults.length > 0) showDropdown.value = true;
 }
 
 function onBlur() {
-    // Delay to allow click on dropdown item
     setTimeout(() => {
         showDropdown.value = false;
     }, 200);
 }
 
+function selectResult(item) {
+    showDropdown.value = false;
+    if (item.source === "db") {
+        weather.selectDbLocation(item);
+    } else {
+        weather.selectGooglePrediction(item);
+    }
+}
+
+async function onSearchOnline() {
+    await weather.searchOnline(weather.searchQuery);
+    showDropdown.value = weather.searchResults.length > 0;
+}
+
 function clearSearch() {
-    weather.clearAll();
+    weather.clearSearch();
     showDropdown.value = false;
     if (searchInput.value) searchInput.value.focus();
 }
 
-function loadSaved(location) {
-    weather.loadSavedLocation(location);
-}
-
-function removeSaved(placeId) {
-    weather.removeSavedLocation(placeId);
-}
-
-/* ---- Weather data helpers ---- */
+/* ── Weather helpers ────────────────────────────────────────────────── */
 
 function tempValue(tempObj) {
     if (!tempObj) return "--";
-    // Google Weather API returns { degrees, unit } for Celsius
     const deg = tempObj.degrees ?? tempObj.value;
-    if (deg === undefined || deg === null) return "--";
-    return Math.round(deg);
+    return deg != null ? Math.round(deg) : "--";
 }
 
 function weatherIcon(condition) {
     if (!condition) return "bi-cloud";
-    const iconUri = condition.iconBaseUri || condition.icon_base_uri || "";
-    if (iconUri) return null; // We'll use the Google icon
-    // Fallback to bootstrap icons based on description
-    const desc = (condition.description?.text || condition.type || "").toLowerCase();
+    const desc = (
+        condition.description?.text ||
+        condition.type ||
+        ""
+    ).toLowerCase();
     if (desc.includes("clear") || desc.includes("sunny")) return "bi-sun";
     if (desc.includes("cloud") && desc.includes("part")) return "bi-cloud-sun";
     if (desc.includes("cloud")) return "bi-clouds";
-    if (desc.includes("rain") || desc.includes("drizzle")) return "bi-cloud-rain";
-    if (desc.includes("thunder") || desc.includes("storm")) return "bi-cloud-lightning-rain";
+    if (desc.includes("rain") || desc.includes("drizzle"))
+        return "bi-cloud-rain";
+    if (desc.includes("thunder") || desc.includes("storm"))
+        return "bi-cloud-lightning-rain";
     if (desc.includes("snow")) return "bi-snow";
-    if (desc.includes("fog") || desc.includes("mist") || desc.includes("haze")) return "bi-cloud-fog";
+    if (desc.includes("fog") || desc.includes("mist") || desc.includes("haze"))
+        return "bi-cloud-fog";
     return "bi-cloud";
 }
 
 function googleIconUrl(condition) {
     if (!condition) return null;
     const base = condition.iconBaseUri || condition.icon_base_uri;
-    if (!base) return null;
-    return base + ".png";
+    return base ? base + ".png" : null;
 }
 
 function weatherDescription(condition) {
     if (!condition) return "Unknown";
     if (condition.description?.text) return condition.description.text;
-    if (condition.type) {
+    if (condition.type)
         return condition.type
             .replace(/_/g, " ")
             .replace(/\b\w/g, (c) => c.toUpperCase());
-    }
     return "Unknown";
 }
 
-function windSpeed(wind) {
-    if (!wind?.speed?.value && !wind?.speed?.kilometers_per_hour)
-        return "--";
-    return Math.round(
-        wind.speed.value ?? wind.speed.kilometers_per_hour ?? 0,
-    );
-}
-
-function windDirection(wind) {
-    if (!wind?.direction?.cardinal) return "";
-    return wind.direction.cardinal;
-}
-
-function formatDate(dateObj) {
-    if (!dateObj) return "";
-    const { year, month, day } = dateObj;
-    if (!year) return "";
-    const d = new Date(year, (month || 1) - 1, day || 1);
-    return d.toLocaleDateString("en-IN", {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
+function formatHour(isoString) {
+    if (!isoString) return "";
+    return new Date(isoString).toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
     });
 }
 
-function formatShortDay(dateObj) {
-    if (!dateObj) return "";
-    const { year, month, day } = dateObj;
-    if (!year) return "";
-    const d = new Date(year, (month || 1) - 1, day || 1);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    d.setHours(0, 0, 0, 0);
-    if (d.getTime() === today.getTime()) return "Today";
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    if (d.getTime() === tomorrow.getTime()) return "Tomorrow";
-    return d.toLocaleDateString("en-IN", { weekday: "short" });
+function formatDateTime(dt) {
+    if (!dt) return "--";
+    return new Date(dt).toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 }
+
+/* ── Computed from store ────────────────────────────────────────────── */
+
+const currentCondition = computed(
+    () => weather.currentWeather?.weatherCondition ?? null
+);
+const currentIcon = computed(() => googleIconUrl(currentCondition.value));
+const currentIconFallback = computed(() => weatherIcon(currentCondition.value));
 
 const currentTemp = computed(() => {
     if (!weather.currentWeather) return "--";
     return tempValue(weather.currentWeather.temperature);
 });
 
-const currentCondition = computed(() => {
-    if (!weather.currentWeather) return null;
-    return weather.currentWeather.weatherCondition;
+const feelsLike = computed(() => {
+    if (!weather.currentWeather?.feelsLikeTemperature) return "--";
+    return tempValue(weather.currentWeather.feelsLikeTemperature);
 });
 
-const currentIcon = computed(() => {
-    return googleIconUrl(currentCondition.value);
-});
-
-const currentIconFallback = computed(() => {
-    return weatherIcon(currentCondition.value);
-});
-
-const humidity = computed(() => {
-    return weather.currentWeather?.relativeHumidity ?? "--";
-});
-
-const uvIndex = computed(() => {
-    return weather.currentWeather?.uvIndex ?? "--";
-});
+const humidity = computed(
+    () => weather.currentWeather?.relativeHumidity ?? "--"
+);
+const uvIndex = computed(() => weather.currentWeather?.uvIndex ?? "--");
 
 const visibility = computed(() => {
     const vis = weather.currentWeather?.visibility;
@@ -170,76 +146,137 @@ const pressure = computed(() => {
 const currentWind = computed(() => {
     const w = weather.currentWeather?.wind;
     if (!w) return { speed: "--", dir: "" };
-    return { speed: windSpeed(w), dir: windDirection(w) };
-});
-
-const feelsLike = computed(() => {
-    if (!weather.currentWeather?.feelsLikeTemperature) return "--";
-    return tempValue(weather.currentWeather.feelsLikeTemperature);
+    const speed = w.speed?.value ?? w.speed?.kilometers_per_hour ?? 0;
+    return { speed: Math.round(speed), dir: w.direction?.cardinal ?? "" };
 });
 
 const precipitationProbability = computed(() => {
     const p = weather.currentWeather?.precipitation;
-    if (!p) return null;
-    return p.probability?.percent ?? p.probability ?? null;
+    return p?.probability?.percent ?? p?.probability ?? null;
 });
 
-onUnmounted(() => {
-    weather.clearSearch();
-});
+/* ── Lifecycle ──────────────────────────────────────────────────────── */
+
+onMounted(() => weather.fetchStoredLocations());
+onUnmounted(() => weather.clearSearch());
 </script>
 
 <template>
     <div class="weather-page">
-        <!-- Header section -->
+        <!-- Header -->
         <div class="weather-header">
             <div class="d-flex align-items-center justify-content-between mb-1">
                 <div>
                     <h1 class="page-title">Weather</h1>
                     <p class="page-subtitle" v-if="!weather.hasLocation">
-                        Search for a location to view current conditions and forecast
+                        Select a location or search to view weather
                     </p>
+                    <button
+                        v-else
+                        class="change-location-btn"
+                        @click="weather.clearWeather()"
+                    >
+                        <i class="bi bi-arrow-left-short"></i>
+                        Change location
+                    </button>
                 </div>
             </div>
 
             <!-- Search bar -->
             <div class="search-container">
-                <div class="search-wrapper" :class="{ active: showDropdown && weather.predictions.length }">
+                <div
+                    class="search-wrapper"
+                    :class="{
+                        active: showDropdown && weather.searchResults.length,
+                    }"
+                >
                     <i class="bi bi-search search-icon"></i>
-                    <input ref="searchInput" type="text" class="search-input" placeholder="Search city, district, or region..."
-                        :value="weather.searchQuery" @input="onInput" @focus="onFocus" @blur="onBlur"
-                        autocomplete="off" spellcheck="false" />
+                    <input
+                        ref="searchInput"
+                        type="text"
+                        class="search-input"
+                        placeholder="Search city, district, or region..."
+                        :value="weather.searchQuery"
+                        @input="onInput"
+                        @focus="onFocus"
+                        @blur="onBlur"
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
                     <span v-if="weather.isSearching" class="search-spinner">
                         <span class="spinner-border spinner-border-sm"></span>
                     </span>
-                    <button v-else-if="weather.searchQuery" class="search-clear" @click="clearSearch">
+                    <button
+                        v-else-if="weather.searchQuery"
+                        class="search-clear"
+                        @click="clearSearch"
+                    >
                         <i class="bi bi-x-lg"></i>
                     </button>
                 </div>
 
                 <!-- Autocomplete dropdown -->
                 <Transition name="dropdown">
-                    <div v-if="showDropdown && weather.predictions.length" class="search-dropdown">
-                        <button v-for="pred in weather.predictions" :key="pred.place_id" class="dropdown-item"
-                            @mousedown.prevent="selectPrediction(pred)">
-                            <i class="bi bi-geo-alt me-2 text-sienna"></i>
+                    <div
+                        v-if="showDropdown && weather.searchResults.length"
+                        class="search-dropdown"
+                    >
+                        <button
+                            v-for="item in weather.searchResults"
+                            :key="item.id ?? item.place_id"
+                            class="dropdown-item"
+                            @mousedown.prevent="selectResult(item)"
+                        >
+                            <i
+                                class="bi me-2"
+                                :class="
+                                    item.source === 'db'
+                                        ? 'bi-database text-sage'
+                                        : 'bi-geo-alt text-sienna'
+                                "
+                            ></i>
                             <div class="dropdown-text">
-                                <span class="dropdown-main">{{ pred.main_text }}</span>
-                                <span class="dropdown-secondary">{{ pred.secondary_text }}</span>
+                                <span class="dropdown-main">
+                                    {{ item.city
+                                    }}<span
+                                        v-if="item.state"
+                                        class="dropdown-state"
+                                        >, {{ item.state }}</span
+                                    >
+                                </span>
+                                <span
+                                    v-if="
+                                        item.source === 'google' &&
+                                        item.description
+                                    "
+                                    class="dropdown-secondary"
+                                >
+                                    {{ item.description }}
+                                </span>
                             </div>
+                        </button>
+
+                        <!-- Search online — only when Google not yet searched -->
+                        <button
+                            v-if="!weather.googleWasSearched"
+                            class="dropdown-item dropdown-search-online"
+                            @mousedown.prevent="onSearchOnline"
+                        >
+                            <i class="bi bi-cloud-download me-2"></i>
+                            <span>Search online</span>
                         </button>
                     </div>
                 </Transition>
             </div>
         </div>
 
-        <!-- Error state -->
+        <!-- Error -->
         <div v-if="weather.error" class="error-bar animate-fade-in-up">
             <i class="bi bi-exclamation-circle me-2"></i>
             {{ weather.error }}
         </div>
 
-        <!-- Loading state -->
+        <!-- Loading -->
         <div v-if="weather.isLoadingWeather" class="loading-state animate-fade-in">
             <div class="loading-card">
                 <div class="spinner-border text-moss mb-3" role="status">
@@ -250,21 +287,49 @@ onUnmounted(() => {
         </div>
 
         <!-- Weather content -->
-        <div v-else-if="weather.hasWeather && weather.selectedLocation" class="weather-content">
-
-            <!-- Location name -->
+        <div
+            v-else-if="weather.hasWeather && weather.selectedLocation"
+            class="weather-content"
+        >
+            <!-- Location badge + cache info -->
             <div class="location-badge animate-fade-in-up">
                 <i class="bi bi-geo-alt-fill"></i>
-                <span>{{ weather.selectedLocation.name || weather.selectedLocation.formatted_address }}</span>
+                <span>
+                    {{ weather.selectedLocation.city
+                    }}<template v-if="weather.selectedLocation.state"
+                        >, {{ weather.selectedLocation.state }}</template
+                    >
+                </span>
+                <span class="badge-fetched-at">
+                    <i class="bi bi-clock ms-2 me-1"></i>
+                    {{ formatDateTime(weather.selectedWeather?.fetched_at) }}
+                    <span
+                        v-if="weather.selectedWeather?.is_manual"
+                        class="badge-manual ms-1"
+                        >manual</span
+                    >
+                </span>
             </div>
 
             <!-- Current conditions -->
-            <div v-if="weather.currentWeather" class="current-card animate-fade-in-up animate-delay-1">
+            <div
+                v-if="weather.currentWeather"
+                class="current-card animate-fade-in-up animate-delay-1"
+            >
                 <div class="current-main">
                     <div class="current-temp-group">
                         <div class="current-icon">
-                            <img v-if="currentIcon" :src="currentIcon" alt="weather" class="weather-img" />
-                            <i v-else :class="currentIconFallback" class="weather-icon-fallback"></i>
+                            <img
+                                v-if="currentIcon"
+                                :src="currentIcon"
+                                alt="weather"
+                                class="weather-img"
+                            />
+                            <i
+                                v-else
+                                :class="currentIconFallback"
+                                class="weather-icon-fallback"
+                            ></i>
                         </div>
                         <div class="current-temp">
                             <span class="temp-value">{{ currentTemp }}</span>
@@ -272,8 +337,27 @@ onUnmounted(() => {
                         </div>
                     </div>
                     <div class="current-details">
-                        <p class="condition-text">{{ weatherDescription(currentCondition) }}</p>
+                        <p class="condition-text">
+                            {{ weatherDescription(currentCondition) }}
+                        </p>
                         <p class="feels-like">Feels like {{ feelsLike }}&deg;</p>
+                        <button
+                            class="refresh-btn"
+                            :disabled="weather.isLoadingWeather"
+                            @click="
+                                weather.fetchWeatherForLocation(
+                                    weather.selectedLocation.id,
+                                    true
+                                )
+                            "
+                            title="Refresh weather data"
+                        >
+                            <i
+                                class="bi bi-arrow-clockwise"
+                                :class="{ spin: weather.isLoadingWeather }"
+                            ></i>
+                            Refresh
+                        </button>
                     </div>
                 </div>
 
@@ -289,8 +373,13 @@ onUnmounted(() => {
                     <div class="metric">
                         <i class="bi bi-wind"></i>
                         <div class="metric-info">
-                            <span class="metric-value">{{ currentWind.speed }} <small>km/h</small></span>
-                            <span class="metric-label">Wind {{ currentWind.dir }}</span>
+                            <span class="metric-value"
+                                >{{ currentWind.speed }}
+                                <small>km/h</small></span
+                            >
+                            <span class="metric-label"
+                                >Wind {{ currentWind.dir }}</span
+                            >
                         </div>
                     </div>
                     <div class="metric">
@@ -303,7 +392,9 @@ onUnmounted(() => {
                     <div class="metric">
                         <i class="bi bi-speedometer2"></i>
                         <div class="metric-info">
-                            <span class="metric-value">{{ pressure }} <small>mb</small></span>
+                            <span class="metric-value"
+                                >{{ pressure }} <small>mb</small></span
+                            >
                             <span class="metric-label">Pressure</span>
                         </div>
                     </div>
@@ -314,79 +405,97 @@ onUnmounted(() => {
                             <span class="metric-label">Visibility</span>
                         </div>
                     </div>
-                    <div class="metric" v-if="precipitationProbability !== null">
+                    <div v-if="precipitationProbability !== null" class="metric">
                         <i class="bi bi-cloud-rain"></i>
                         <div class="metric-info">
-                            <span class="metric-value">{{ precipitationProbability }}%</span>
+                            <span class="metric-value"
+                                >{{ precipitationProbability }}%</span
+                            >
                             <span class="metric-label">Precipitation</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Forecast -->
-            <div v-if="weather.forecast.length" class="forecast-section animate-fade-in-up animate-delay-2">
-                <h2 class="section-title">{{ weather.forecast.length }}-Day Forecast</h2>
-                <div class="forecast-list">
-                    <div v-for="(day, idx) in weather.forecast" :key="idx" class="forecast-row"
-                        :class="{ 'animate-fade-in-up': true }" :style="{ animationDelay: `${0.1 + idx * 0.06}s` }">
-                        <div class="forecast-day">
-                            {{ formatShortDay(day.date || day.displayDate) }}
-                        </div>
-                        <div class="forecast-icon">
-                            <img v-if="googleIconUrl(day.daytimeForecast?.weatherCondition)"
-                                :src="googleIconUrl(day.daytimeForecast?.weatherCondition)" alt=""
-                                class="forecast-weather-img" />
-                            <i v-else
-                                :class="weatherIcon(day.daytimeForecast?.weatherCondition)"
-                                class="forecast-icon-fallback"></i>
-                        </div>
-                        <div class="forecast-condition">
-                            {{ weatherDescription(day.daytimeForecast?.weatherCondition) }}
-                        </div>
-                        <div class="forecast-precip" v-if="day.daytimeForecast?.precipitation?.probability?.percent">
-                            <i class="bi bi-droplet-fill"></i>
-                            {{ day.daytimeForecast.precipitation.probability.percent }}%
-                        </div>
-                        <div class="forecast-temps">
-                            <span class="temp-high">{{ tempValue(day.maxTemperature) }}&deg;</span>
-                            <span class="temp-divider">/</span>
-                            <span class="temp-low">{{ tempValue(day.minTemperature) }}&deg;</span>
-                        </div>
+            <!-- Hourly forecast strip -->
+            <div
+                v-if="weather.forecastHours.length"
+                class="forecast-section animate-fade-in-up animate-delay-2"
+            >
+                <h2 class="section-title">Hourly Forecast</h2>
+                <div class="hourly-strip">
+                    <div
+                        v-for="(h, idx) in weather.forecastHours.slice(0, 12)"
+                        :key="idx"
+                        class="hourly-item"
+                    >
+                        <span class="hourly-time">{{
+                            formatHour(h.interval?.startTime)
+                        }}</span>
+                        <img
+                            v-if="googleIconUrl(h.weatherCondition)"
+                            :src="googleIconUrl(h.weatherCondition)"
+                            class="hourly-img"
+                            alt=""
+                        />
+                        <i
+                            v-else
+                            :class="weatherIcon(h.weatherCondition)"
+                            class="hourly-icon-fallback"
+                        ></i>
+                        <span class="hourly-temp">
+                            {{
+                                h.temperature?.degrees != null
+                                    ? Math.round(h.temperature.degrees) + "°"
+                                    : "—"
+                            }}
+                        </span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Saved locations (shown when no weather is displayed) -->
-        <div v-if="!weather.hasWeather && !weather.isLoadingWeather && weather.savedLocations.length"
-            class="saved-section animate-fade-in-up">
-            <h2 class="section-title">Recent Locations</h2>
-            <div class="saved-list">
-                <button v-for="loc in weather.savedLocations" :key="loc.place_id" class="saved-item"
-                    @click="loadSaved(loc)">
-                    <div class="saved-info">
-                        <i class="bi bi-clock-history me-2"></i>
-                        <div>
-                            <span class="saved-name">{{ loc.name }}</span>
-                            <span class="saved-address">{{ loc.formatted_address }}</span>
+        <!-- Saved locations grid (shown when no weather selected) -->
+        <div
+            v-if="!weather.hasWeather && !weather.isLoadingWeather"
+            class="animate-fade-in-up animate-delay-1"
+        >
+            <template v-if="weather.storedLocations.length">
+                <h2 class="section-title">Saved Locations</h2>
+                <div class="locations-grid">
+                    <button
+                        v-for="loc in weather.storedLocations"
+                        :key="loc.id"
+                        class="location-card"
+                        @click="weather.selectDbLocation(loc)"
+                    >
+                        <i class="bi bi-geo-alt location-card-icon"></i>
+                        <div class="location-card-body">
+                            <span class="location-card-city">{{ loc.city }}</span>
+                            <span
+                                v-if="loc.state || loc.country"
+                                class="location-card-sub"
+                            >
+                                {{
+                                    [loc.state, loc.country]
+                                        .filter(Boolean)
+                                        .join(", ")
+                                }}
+                            </span>
                         </div>
-                    </div>
-                    <button class="saved-remove" @click.stop="removeSaved(loc.place_id)"
-                        title="Remove">
-                        <i class="bi bi-x"></i>
+                        <i class="bi bi-chevron-right location-card-arrow"></i>
                     </button>
-                </button>
+                </div>
+            </template>
+            <div
+                v-else-if="!weather.error"
+                class="empty-state animate-fade-in-up animate-delay-1"
+            >
+                <div class="empty-illustration">
+                    <i class="bi bi-cloud-sun"></i>
+                </div>
+                <p class="empty-text">Search for a location to get started</p>
             </div>
-        </div>
-
-        <!-- Empty state -->
-        <div v-if="!weather.hasWeather && !weather.isLoadingWeather && !weather.savedLocations.length && !weather.error"
-            class="empty-state animate-fade-in-up animate-delay-1">
-            <div class="empty-illustration">
-                <i class="bi bi-cloud-sun"></i>
-            </div>
-            <p class="empty-text">Search for a location to get started</p>
         </div>
     </div>
 </template>
@@ -415,6 +524,25 @@ onUnmounted(() => {
     color: var(--text-secondary);
     font-size: 0.9rem;
     margin: 0.35rem 0 0;
+}
+
+.change-location-btn {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: none;
+    color: var(--sage);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 0.35rem;
+    transition: color var(--transition-fast);
+}
+
+.change-location-btn:hover {
+    color: var(--moss);
 }
 
 /* ---- Search ---- */
@@ -526,6 +654,18 @@ onUnmounted(() => {
     background: var(--parchment);
 }
 
+.dropdown-search-online {
+    color: var(--sage);
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-top: 1px solid var(--border-light);
+}
+
+.dropdown-search-online:hover {
+    background: rgba(138, 154, 123, 0.06);
+    color: var(--moss);
+}
+
 .dropdown-text {
     display: flex;
     flex-direction: column;
@@ -540,6 +680,11 @@ onUnmounted(() => {
     text-overflow: ellipsis;
 }
 
+.dropdown-state {
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
 .dropdown-secondary {
     font-size: 0.8rem;
     color: var(--text-secondary);
@@ -548,10 +693,19 @@ onUnmounted(() => {
     text-overflow: ellipsis;
 }
 
+.text-sage {
+    color: var(--sage);
+}
+
+.text-sienna {
+    color: var(--sienna);
+}
+
 .dropdown-enter-active,
 .dropdown-leave-active {
     transition: opacity 0.15s ease, transform 0.15s ease;
 }
+
 .dropdown-enter-from,
 .dropdown-leave-to {
     opacity: 0;
@@ -597,6 +751,26 @@ onUnmounted(() => {
     font-size: 0.82rem;
     font-weight: 500;
     margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+.badge-fetched-at {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.75rem;
+    opacity: 0.75;
+    font-weight: 400;
+}
+
+.badge-manual {
+    background: rgba(196, 163, 90, 0.2);
+    color: #8a6f2a;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 /* ---- Current conditions ---- */
@@ -673,7 +847,44 @@ onUnmounted(() => {
 .feels-like {
     font-size: 0.85rem;
     color: var(--text-secondary);
-    margin: 0;
+    margin: 0 0 0.6rem;
+}
+
+.refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    font-family: var(--font-body);
+}
+
+.refresh-btn:hover:not(:disabled) {
+    border-color: var(--moss);
+    color: var(--moss);
+    background: rgba(74, 103, 65, 0.06);
+}
+
+.refresh-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* ---- Metrics ---- */
@@ -723,7 +934,7 @@ onUnmounted(() => {
     line-height: 1.2;
 }
 
-/* ---- Forecast ---- */
+/* ---- Hourly forecast strip ---- */
 .forecast-section {
     margin-bottom: 2rem;
 }
@@ -735,177 +946,122 @@ onUnmounted(() => {
     margin: 0 0 1rem;
 }
 
-.forecast-list {
+.hourly-strip {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.hourly-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 56px;
+    padding: 10px 8px;
     background: var(--white);
     border: 1px solid var(--border-light);
-    border-radius: 16px;
-    overflow: hidden;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    text-align: center;
     box-shadow: var(--shadow-sm);
 }
 
-.forecast-row {
-    display: grid;
-    grid-template-columns: 5.5rem 2.5rem 1fr auto 5rem;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.85rem 1.25rem;
-    border-bottom: 1px solid var(--border-light);
-    transition: background var(--transition-fast);
+.hourly-time {
+    font-size: 0.7rem;
+    opacity: 0.7;
 }
 
-.forecast-row:last-child {
-    border-bottom: none;
+.hourly-img {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
 }
 
-.forecast-row:hover {
-    background: var(--parchment);
+.hourly-icon-fallback {
+    font-size: 1.15rem;
+    color: var(--harvest);
 }
 
-.forecast-day {
-    font-weight: 500;
+.hourly-temp {
+    font-weight: 700;
     font-size: 0.88rem;
     color: var(--loam);
 }
 
-.forecast-icon {
+/* ---- Saved locations grid ---- */
+.locations-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 1.5rem;
+}
+
+.location-card {
     display: flex;
     align-items: center;
-    justify-content: center;
-}
-
-.forecast-weather-img {
-    width: 32px;
-    height: 32px;
-    object-fit: contain;
-}
-
-.forecast-icon-fallback {
-    font-size: 1.25rem;
-    color: var(--harvest);
-}
-
-.forecast-condition {
-    font-size: 0.82rem;
-    color: var(--text-secondary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.forecast-precip {
-    font-size: 0.78rem;
-    color: var(--sage);
-    white-space: nowrap;
-}
-
-.forecast-precip i {
-    font-size: 0.7rem;
-}
-
-.forecast-temps {
-    text-align: right;
-    white-space: nowrap;
-    font-size: 0.9rem;
-}
-
-.temp-high {
-    font-weight: 600;
-    color: var(--loam);
-}
-
-.temp-divider {
-    color: var(--border);
-    margin: 0 0.15rem;
-}
-
-.temp-low {
-    color: var(--text-secondary);
-}
-
-/* ---- Saved locations ---- */
-.saved-section {
-    margin-top: 1.5rem;
-}
-
-.saved-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.saved-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    gap: 0.75rem;
     background: var(--white);
     border: 1px solid var(--border-light);
     border-radius: 12px;
-    padding: 0.75rem 1rem;
+    padding: 0.85rem 1rem;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    text-align: left;
     font-family: var(--font-body);
     color: var(--text-primary);
-    width: 100%;
-    text-align: left;
-}
-
-.saved-item:hover {
-    border-color: var(--sage);
+    transition: all var(--transition-fast);
     box-shadow: var(--shadow-sm);
+    width: 100%;
 }
 
-.saved-info {
+.location-card:hover {
+    border-color: var(--sage);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.location-card-icon {
+    font-size: 1.1rem;
+    color: var(--sage);
+    flex-shrink: 0;
+}
+
+.location-card-body {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     min-width: 0;
     flex: 1;
 }
 
-.saved-info > div {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.saved-info i {
-    color: var(--sage);
-    flex-shrink: 0;
-}
-
-.saved-name {
-    font-weight: 500;
+.location-card-city {
+    font-weight: 600;
     font-size: 0.88rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.saved-address {
-    font-size: 0.78rem;
+.location-card-sub {
+    font-size: 0.75rem;
     color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.saved-remove {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 0.25rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1rem;
-    transition: all var(--transition-fast);
+.location-card-arrow {
+    font-size: 0.85rem;
+    color: var(--border);
     flex-shrink: 0;
+    transition: color var(--transition-fast);
 }
 
-.saved-remove:hover {
-    color: var(--sienna);
-    background: var(--sienna-faded);
+.location-card:hover .location-card-arrow {
+    color: var(--sage);
 }
 
 /* ---- Empty state ---- */
@@ -946,11 +1102,8 @@ onUnmounted(() => {
         grid-template-columns: repeat(2, 1fr);
     }
 
-    .forecast-row {
-        grid-template-columns: 4rem 2rem 1fr auto 4.5rem;
-        gap: 0.5rem;
-        padding: 0.75rem 0.85rem;
-        font-size: 0.85rem;
+    .locations-grid {
+        grid-template-columns: 1fr;
     }
 
     .temp-value {
@@ -962,18 +1115,6 @@ onUnmounted(() => {
     .metrics-grid {
         grid-template-columns: 1fr 1fr;
         gap: 0.6rem;
-    }
-
-    .forecast-row {
-        grid-template-columns: 3.5rem 2rem 1fr 4rem;
-    }
-
-    .forecast-condition {
-        display: none;
-    }
-
-    .forecast-precip {
-        display: none;
     }
 }
 </style>

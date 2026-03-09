@@ -64,14 +64,16 @@ const router = createRouter({
 });
 
 router.beforeEach((to) => {
-    const token = localStorage.getItem("token");
+    const auth = useAuthStore();
 
-    if (to.meta.requiresAuth && !token) {
-        return { name: "login" };
+    if (to.meta.requiresAuth) {
+        if (!auth.isAuthenticated) {
+            auth.logout(); // clear stale/expired token from localStorage
+            return { name: "login" };
+        }
     }
 
     if (to.meta.requiresRole) {
-        const auth = useAuthStore();
         if (!auth.userRoles?.includes(to.meta.requiresRole)) {
             return { name: "dashboard" };
         }

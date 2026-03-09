@@ -3,203 +3,196 @@ import { ref, computed } from "vue";
 import api from "@/utils/api";
 
 export const useWeatherStore = defineStore("weather", () => {
-    /* -------------------------
-       State
-    --------------------------*/
+    /* ── State ─────────────────────────────────────────────────────────── */
+
+    // All DB-persisted locations (shown in saved-locations grid)
+    const storedLocations = ref([]);
+
+    // The currently selected DB location object
+    // { id, city, state, country, latitude, longitude }
+    const selectedLocation = ref(null);
+
+    // The most recent WeatherSchema record for the selected location
+    // { id, location_id, fetched_at, is_manual, raw_json: { current, hourly } }
+    const selectedWeather = ref(null);
+
+    // Location search state
     const searchQuery = ref("");
-    const predictions = ref([]);
+    const searchResults = ref([]);      // DB + possibly Google results
+    const googleWasSearched = ref(false); // true if Google was queried this search
     const isSearching = ref(false);
 
-    const selectedLocation = ref(null);
-    // { name, formatted_address, latitude, longitude, address_components }
-
-    const currentWeather = ref(null);
-    const forecast = ref([]);
+    // Weather load state
     const isLoadingWeather = ref(false);
-
-    const savedLocations = ref([]);
-    // Array of { name, formatted_address, latitude, longitude, place_id }
 
     const error = ref(null);
 
-    /* -------------------------
-       Computed
-    --------------------------*/
+    /* ── Computed ───────────────────────────────────────────────────────── */
+
     const hasLocation = computed(() => selectedLocation.value !== null);
-    const hasWeather = computed(
-        () => currentWeather.value !== null || forecast.value.length > 0,
+    const hasWeather = computed(() => selectedWeather.value !== null);
+
+    // Convenience accessors into raw_json
+    const currentWeather = computed(
+        () => selectedWeather.value?.raw_json?.current ?? null
+    );
+    const forecastHours = computed(
+        () => selectedWeather.value?.raw_json?.hourly?.forecastHours ?? []
     );
 
-    /* -------------------------
-       Actions
-    --------------------------*/
+    /* ── Actions ────────────────────────────────────────────────────────── */
 
+    /** Load all DB locations for the saved-locations grid. */
+    async function fetchStoredLocations() {
+        try {
+            const { data } = await api.get("/api/weather/locations");
+            storedLocations.value = data;
+        } catch (err) {
+            console.error("Failed to load stored locations:", err);
+        }
+    }
+
+    /** DB-first search (300 ms debounce). Google auto-runs only if DB has 0 results. */
     let searchTimeout = null;
-
     async function searchLocations(query) {
         searchQuery.value = query;
         error.value = null;
+        clearTimeout(searchTimeout);
 
         if (!query || query.length < 2) {
-            predictions.value = [];
+            searchResults.value = [];
+            googleWasSearched.value = false;
             return;
         }
 
-        // Debounce — wait 300ms after user stops typing
-        clearTimeout(searchTimeout);
-        return new Promise((resolve) => {
-            searchTimeout = setTimeout(async () => {
-                isSearching.value = true;
-                try {
-                    const { data } = await api.get(
-                        "/api/weather/search-locations",
-                        { params: { query } },
-                    );
-                    predictions.value = data.predictions || [];
-                } catch (err) {
-                    console.error("Location search failed:", err);
-                    error.value = "Failed to search locations";
-                    predictions.value = [];
-                } finally {
-                    isSearching.value = false;
-                    resolve();
-                }
-            }, 300);
-        });
-    }
-
-    async function selectLocation(prediction) {
-        error.value = null;
-        predictions.value = [];
-        searchQuery.value = prediction.description;
-        isLoadingWeather.value = true;
-
-        try {
-            // Fetch place details to get lat/lng
-            const { data } = await api.get("/api/weather/place-details", {
-                params: { place_id: prediction.place_id },
-            });
-
-            selectedLocation.value = {
-                ...data,
-                place_id: prediction.place_id,
-            };
-
-            // Fetch weather data in parallel
-            await Promise.all([
-                fetchCurrentWeather(data.latitude, data.longitude),
-                fetchForecast(data.latitude, data.longitude),
-            ]);
-
-            // Add to saved locations if not already there
-            const exists = savedLocations.value.some(
-                (loc) => loc.place_id === prediction.place_id,
-            );
-            if (!exists) {
-                savedLocations.value.unshift({
-                    name: data.name,
-                    formatted_address: data.formatted_address,
-                    latitude: data.latitude,
-                    longitude: data.longitude,
-                    place_id: prediction.place_id,
+        searchTimeout = setTimeout(async () => {
+            isSearching.value = true;
+            try {
+                const { data } = await api.get("/locations/search", {
+                    params: { q: query },
                 });
-                // Keep only last 5 locations
-                if (savedLocations.value.length > 5) {
-                    savedLocations.value.pop();
-                }
+                searchResults.value = data.results || [];
+                googleWasSearched.value = data.google_searched || false;
+            } catch (err) {
+                console.error("Location search failed:", err);
+                error.value = "Failed to search locations";
+                searchResults.value = [];
+            } finally {
+                isSearching.value = false;
             }
+        }, 300);
+    }
+
+    /** Explicitly trigger a Google search (user clicked "Search online"). */
+    async function searchOnline(query) {
+        if (!query || query.length < 2) return;
+        isSearching.value = true;
+        try {
+            const { data } = await api.get("/locations/search", {
+                params: { q: query, force_google: true },
+            });
+            searchResults.value = data.results || [];
+            googleWasSearched.value = true;
         } catch (err) {
-            console.error("Failed to select location:", err);
-            error.value = "Failed to load location details";
+            console.error("Online location search failed:", err);
+            error.value = "Failed to search online";
         } finally {
-            isLoadingWeather.value = false;
+            isSearching.value = false;
         }
     }
 
-    async function fetchCurrentWeather(lat, lng) {
-        try {
-            const { data } = await api.get("/api/weather/current", {
-                params: { lat, lng },
-            });
-            currentWeather.value = data;
-        } catch (err) {
-            console.error("Current weather fetch failed:", err);
-            currentWeather.value = null;
-        }
-    }
-
-    async function fetchForecast(lat, lng, days = 5) {
-        try {
-            const { data } = await api.get("/api/weather/forecast", {
-                params: { lat, lng, days },
-            });
-            forecast.value = data.forecastDays || [];
-        } catch (err) {
-            console.error("Forecast fetch failed:", err);
-            forecast.value = [];
-        }
-    }
-
-    async function loadSavedLocation(location) {
+    /** Select a DB location and load its weather. */
+    async function selectDbLocation(loc) {
         error.value = null;
-        searchQuery.value = location.formatted_address || location.name;
-        selectedLocation.value = location;
-        isLoadingWeather.value = true;
+        searchQuery.value = loc.city + (loc.state ? `, ${loc.state}` : "");
+        searchResults.value = [];
+        selectedLocation.value = loc;
+        await fetchWeatherForLocation(loc.id, false);
+    }
 
+    /** Resolve a Google prediction to DB, then load weather. */
+    async function selectGooglePrediction(pred) {
+        error.value = null;
+        isLoadingWeather.value = true;
         try {
-            await Promise.all([
-                fetchCurrentWeather(location.latitude, location.longitude),
-                fetchForecast(location.latitude, location.longitude),
-            ]);
+            const { data: loc } = await api.post("/locations/resolve", null, {
+                params: { place_id: pred.place_id },
+            });
+            // Refresh stored locations so the new entry appears in the grid
+            await fetchStoredLocations();
+            searchQuery.value = loc.city + (loc.state ? `, ${loc.state}` : "");
+            searchResults.value = [];
+            selectedLocation.value = loc;
+            await fetchWeatherForLocation(loc.id, false);
         } catch (err) {
-            error.value = "Failed to load weather data";
+            console.error("Failed to resolve Google prediction:", err);
+            error.value = "Failed to load location";
         } finally {
             isLoadingWeather.value = false;
         }
     }
 
-    function removeSavedLocation(placeId) {
-        savedLocations.value = savedLocations.value.filter(
-            (loc) => loc.place_id !== placeId,
-        );
+    /** Fetch weather for a location. manual=true bypasses the 6h TTL. */
+    async function fetchWeatherForLocation(locationId, manual = false) {
+        isLoadingWeather.value = true;
+        error.value = null;
+        try {
+            let res;
+            if (manual) {
+                res = await api.post(`/api/weather/by-location/${locationId}/refresh`);
+            } else {
+                res = await api.get(`/api/weather/by-location/${locationId}`);
+            }
+            selectedWeather.value = res.data;
+        } catch (err) {
+            console.error("Weather fetch failed:", err);
+            error.value =
+                err.response?.data?.detail || "Failed to load weather data";
+            selectedWeather.value = null;
+        } finally {
+            isLoadingWeather.value = false;
+        }
+    }
+
+    /** Clear selected location and weather; return to the locations grid. */
+    function clearWeather() {
+        selectedLocation.value = null;
+        selectedWeather.value = null;
+        searchQuery.value = "";
+        searchResults.value = [];
+        error.value = null;
     }
 
     function clearSearch() {
         searchQuery.value = "";
-        predictions.value = [];
-    }
-
-    function clearAll() {
-        searchQuery.value = "";
-        predictions.value = [];
-        selectedLocation.value = null;
-        currentWeather.value = null;
-        forecast.value = [];
-        error.value = null;
+        searchResults.value = [];
+        googleWasSearched.value = false;
     }
 
     return {
         // State
-        searchQuery,
-        predictions,
-        isSearching,
+        storedLocations,
         selectedLocation,
-        currentWeather,
-        forecast,
+        selectedWeather,
+        searchQuery,
+        searchResults,
+        googleWasSearched,
+        isSearching,
         isLoadingWeather,
-        savedLocations,
         error,
         // Computed
         hasLocation,
         hasWeather,
+        currentWeather,
+        forecastHours,
         // Actions
+        fetchStoredLocations,
         searchLocations,
-        selectLocation,
-        fetchCurrentWeather,
-        fetchForecast,
-        loadSavedLocation,
-        removeSavedLocation,
+        searchOnline,
+        selectDbLocation,
+        selectGooglePrediction,
+        fetchWeatherForLocation,
+        clearWeather,
         clearSearch,
-        clearAll,
     };
 });

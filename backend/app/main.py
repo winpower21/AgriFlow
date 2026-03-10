@@ -28,7 +28,7 @@ from sqlalchemy import text
 from .config import settings
 from .database import SessionLocal, engine
 from .models.user import Role
-from .routers import auth, expense, general, personnel, plantation, users, weather_google
+from .routers import approval, auth, consumable, expense, general, personnel, plantation, users, vehicle, weather_google
 from .routers.weather_google import location_weather_router
 from .routers.plantation import locations_router
 # Aliased to avoid collision with the stdlib/app-level `settings` object
@@ -116,6 +116,7 @@ app.add_middleware(
 # Router registration — each router handles a distinct domain area.
 # Routers define their own URL prefixes and tags internally.
 # ---------------------------------------------------------------------------
+app.include_router(approval.router)         # /approvals — approval workflow
 app.include_router(auth.router)             # /auth — login, registration, token refresh
 app.include_router(users.router)            # /users — user management
 app.include_router(personnel.router)        # /personnel — farm worker records
@@ -123,6 +124,8 @@ app.include_router(plantation.router)       # /plantations — plantation/crop t
 app.include_router(locations_router)        # /locations — location search and resolve
 app.include_router(expense.router)          # /expenses — expense tracking
 app.include_router(settings_route.router)   # /settings — application settings
+app.include_router(consumable.router)       # /consumables — consumable items and purchases
+app.include_router(vehicle.router)          # /vehicles — vehicle management
 app.include_router(general.router)          # /general — shared/utility endpoints
 app.include_router(weather_google.router)       # /api/weather — pass-through to Google API
 app.include_router(location_weather_router)    # /api/weather — location-centric cached weather

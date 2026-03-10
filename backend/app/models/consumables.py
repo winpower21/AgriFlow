@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -9,6 +9,21 @@ from ..database import Base
 
 if TYPE_CHECKING:
     from .transformation import Transformation
+    from .expense import Expense
+
+
+class ConsumableCategory(Base):
+    __tablename__ = "consumable_categories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    consumables: Mapped[List["Consumable"]] = relationship(back_populates="category")
+
+    def __repr__(self) -> str:
+        return f"<ConsumableCategory(id={self.id}, name='{self.name}')>"
 
 
 class Consumable(Base):
@@ -29,6 +44,9 @@ class Consumable(Base):
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
     )
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("consumable_categories.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     purchases: Mapped[List["ConsumablePurchase"]] = relationship(
@@ -38,6 +56,7 @@ class Consumable(Base):
     consumptions: Mapped[List["ConsumableConsumption"]] = relationship(
         back_populates="consumable"
     )
+    category: Mapped[Optional["ConsumableCategory"]] = relationship(back_populates="consumables")
 
     def __repr__(self) -> str:
         return f"<Consumable(id={self.id}, name='{self.name}', unit='{self.unit}')>"
@@ -78,10 +97,14 @@ class ConsumablePurchase(Base):
     invoice_number: Mapped[str | None] = mapped_column(String(100))
     notes: Mapped[str | None] = mapped_column(String(500))
 
+    # Auto-created expense entry for this purchase
+    expense_id: Mapped[int | None] = mapped_column(ForeignKey("expenses.id"))
+
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     # Relationships
     consumable: Mapped["Consumable"] = relationship(back_populates="purchases")
+    expense: Mapped[Optional["Expense"]] = relationship()
     allocations: Mapped[List["ConsumptionAllocation"]] = relationship(
         back_populates="purchase", cascade="all, delete-orphan"
     )

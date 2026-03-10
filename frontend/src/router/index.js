@@ -56,6 +56,24 @@ const routes = [
         component: () => import("@/views/Settings.vue"),
         meta: { layout: "app", requiresAuth: true },
     },
+    {
+        path: "/vehicles",
+        name: "vehicles",
+        component: () => import("@/views/Vehicles.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
+    {
+        path: "/consumables",
+        name: "consumables",
+        component: () => import("@/views/Consumables.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
+    {
+        path: "/expenses",
+        name: "expenses",
+        component: () => import("@/views/Expenses.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
 ];
 
 const router = createRouter({

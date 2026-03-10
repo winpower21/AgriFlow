@@ -34,6 +34,15 @@ class ExpenseCreate(BaseModel):
     description: Optional[str] = None
 
 
+class ExpenseUpdate(BaseModel):
+    date: Optional[datetime] = None
+    amount: Optional[Decimal] = None
+    category_id: Optional[int] = None
+    plantation_id: Optional[int] = None
+    vehicle_id: Optional[int] = None
+    description: Optional[str] = None
+
+
 class ExpenseSchema(BaseModel):
     """API response schema for an expense record.
 

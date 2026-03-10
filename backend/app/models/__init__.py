@@ -34,6 +34,7 @@ from ..database import Base
 from .batch import Batch, BatchStage
 from .consumables import (
     Consumable,
+    ConsumableCategory,
     ConsumableConsumption,
     ConsumablePurchase,
     ConsumptionAllocation,
@@ -53,6 +54,7 @@ from .user import Role, User
 from .vehicle import TransformationVehicle, Vehicle
 from .settings import AppConfig
 from .weather import Weather
+from .approval import ApprovalRequest
 
 # Import all models here so Alembic can discover them.
 # Alembic's env.py imports Base.metadata; every model class that inherits from
@@ -67,6 +69,7 @@ __all__ = [
     "Vehicle",
     "Personnel",
     "WageType",
+    "ConsumableCategory",
     "Consumable",
     "Batch",
     "BatchStage",
@@ -87,4 +90,5 @@ __all__ = [
     "Location",
     "Weather",
     "AppConfig",
+    "ApprovalRequest",
 ]

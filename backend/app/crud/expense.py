@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 from ..models.expense import Expense
+from ..models.consumables import ConsumablePurchase
 from ..schemas.expense import ExpenseCreate, ExpenseUpdate
 
 
@@ -60,10 +61,23 @@ class ExpenseService:
         self.db.commit()
         return self._base_query().filter(Expense.id == expense_id).first()
 
-    def delete(self, expense_id: int) -> bool:
+    def delete(self, expense_id: int) -> Optional[str]:
+        """Delete an expense.
+
+        Returns:
+            None on success.
+            "not_found" if expense doesn't exist.
+            "linked_to_purchase" if expense was auto-generated from a consumable purchase
+            (must delete the purchase instead).
+        """
         obj = self.db.query(Expense).filter(Expense.id == expense_id).first()
         if not obj:
-            return False
+            return "not_found"
+        linked = self.db.query(ConsumablePurchase).filter(
+            ConsumablePurchase.expense_id == expense_id
+        ).first()
+        if linked:
+            return "linked_to_purchase"
         self.db.delete(obj)
         self.db.commit()
-        return True
+        return None

@@ -63,5 +63,11 @@ def update_expense(expense_id: int, data: ExpenseUpdate, db: Session = Depends(g
 @router.delete("/{expense_id}", status_code=204,
                dependencies=[Depends(roles_required("admin"))])
 def delete_expense(expense_id: int, db: Session = Depends(get_db)):
-    if not ExpenseService(db).delete(expense_id):
+    result = ExpenseService(db).delete(expense_id)
+    if result == "not_found":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense not found")
+    if result == "linked_to_purchase":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This expense was auto-generated from a consumable purchase. Delete the purchase instead.",
+        )

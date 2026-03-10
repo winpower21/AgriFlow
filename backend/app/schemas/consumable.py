@@ -4,10 +4,25 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 
+class ConsumableCategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class ConsumableCategorySchema(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ConsumableCreate(BaseModel):
     name: str
     unit: str
     description: Optional[str] = None
+    category_id: Optional[int] = None
 
 
 class ConsumableUpdate(BaseModel):
@@ -15,6 +30,7 @@ class ConsumableUpdate(BaseModel):
     unit: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    category_id: Optional[int] = None
 
 
 class ConsumableSchema(BaseModel):
@@ -24,6 +40,7 @@ class ConsumableSchema(BaseModel):
     description: Optional[str] = None
     is_active: bool
     created_at: datetime
+    category_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

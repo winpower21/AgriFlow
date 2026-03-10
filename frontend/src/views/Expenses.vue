@@ -6,7 +6,9 @@
         <div class="page-header animate-fade-in-up">
             <div>
                 <h2 class="page-title">Expenses</h2>
-                <p class="page-subtitle">Track and manage farm expenditures across categories</p>
+                <p class="page-subtitle">
+                    Track and manage farm expenditures across categories
+                </p>
             </div>
             <div class="header-actions">
                 <template v-if="isAdmin">
@@ -16,7 +18,10 @@
                     </button>
                 </template>
                 <template v-else>
-                    <button class="btn-add btn-add-secondary" @click="openRequestModal">
+                    <button
+                        class="btn-add btn-add-secondary"
+                        @click="openRequestModal"
+                    >
                         <i class="bi bi-send"></i>
                         <span>Submit Request</span>
                     </button>
@@ -34,35 +39,60 @@
             <div class="approvals-panel-header">
                 <i class="bi bi-hourglass-split"></i>
                 <span>Pending Approvals</span>
-                <span class="approvals-count">{{ pendingApprovals.length }}</span>
+                <span class="approvals-count">{{
+                    pendingApprovals.length
+                }}</span>
             </div>
 
-            <div v-for="req in pendingApprovals" :key="req.id" class="approval-card">
-                <div class="approval-card-header" @click="toggleExpanded(req.id)">
+            <div
+                v-for="req in pendingApprovals"
+                :key="req.id"
+                class="approval-card"
+            >
+                <div
+                    class="approval-card-header"
+                    @click="toggleExpanded(req.id)"
+                >
                     <div class="approval-meta">
                         <span class="approval-submitter">
                             <i class="bi bi-person"></i>
-                            {{ req.submitted_by_email || req.submitted_by || "Unknown" }}
+                            {{
+                                req.submitted_by_email ||
+                                req.submitted_by ||
+                                "Unknown"
+                            }}
                         </span>
                         <span class="approval-date">
                             <i class="bi bi-calendar3"></i>
                             {{ formatDate(req.created_at) }}
                         </span>
                         <span class="approval-items-count">
-                            {{ req.items?.length || 0 }} item{{ (req.items?.length || 0) !== 1 ? "s" : "" }}
+                            {{ req.items?.length || 0 }} item{{
+                                (req.items?.length || 0) !== 1 ? "s" : ""
+                            }}
                         </span>
                     </div>
                     <div class="approval-card-right">
-                        <span class="status-chip" :class="statusChipClass(req.status)">
+                        <span
+                            class="status-chip"
+                            :class="statusChipClass(req.status)"
+                        >
                             {{ req.status }}
                         </span>
-                        <button class="btn-approve-all" @click.stop="approveAll(req.id)">
+                        <button
+                            class="btn-approve-all"
+                            @click.stop="approveAll(req.id)"
+                        >
                             <i class="bi bi-check-all"></i>
                             Approve All
                         </button>
                         <i
                             class="bi expand-chevron"
-                            :class="expandedRequests.has(req.id) ? 'bi-chevron-up' : 'bi-chevron-down'"
+                            :class="
+                                expandedRequests.has(req.id)
+                                    ? 'bi-chevron-up'
+                                    : 'bi-chevron-down'
+                            "
                         ></i>
                     </div>
                 </div>
@@ -76,7 +106,13 @@
                     >
                         <!-- Normal view -->
                         <template
-                            v-if="!(editingApprovalItem && editingApprovalItem.requestId === req.id && editingApprovalItem.index === idx)"
+                            v-if="
+                                !(
+                                    editingApprovalItem &&
+                                    editingApprovalItem.requestId === req.id &&
+                                    editingApprovalItem.index === idx
+                                )
+                            "
                         >
                             <div class="approval-item-info">
                                 <span class="approval-item-date dimmed">
@@ -88,7 +124,10 @@
                                 <span class="approval-item-category">
                                     {{ categoryName(item.data?.category_id) }}
                                 </span>
-                                <span v-if="item.data?.description" class="approval-item-detail dimmed">
+                                <span
+                                    v-if="item.data?.description"
+                                    class="approval-item-detail dimmed"
+                                >
                                     {{ item.data.description }}
                                 </span>
                                 <span
@@ -96,7 +135,9 @@
                                     class="approval-item-tag tag-plantation"
                                 >
                                     <i class="bi bi-geo-alt"></i>
-                                    {{ plantationName(item.data.plantation_id) }}
+                                    {{
+                                        plantationName(item.data.plantation_id)
+                                    }}
                                 </span>
                                 <span
                                     v-if="item.data?.vehicle_id"
@@ -106,7 +147,9 @@
                                     {{ vehicleNumber(item.data.vehicle_id) }}
                                 </span>
                                 <span
-                                    v-if="item.status && item.status !== 'PENDING'"
+                                    v-if="
+                                        item.status && item.status !== 'PENDING'
+                                    "
                                     class="status-chip status-chip-sm"
                                     :class="statusChipClass(item.status)"
                                 >
@@ -126,7 +169,13 @@
                                 </button>
                                 <button
                                     class="btn-action-sm btn-edit-approval"
-                                    @click="startEditApproval(req.id, idx, item.data)"
+                                    @click="
+                                        startEditApproval(
+                                            req.id,
+                                            idx,
+                                            item.data,
+                                        )
+                                    "
                                 >
                                     <i class="bi bi-pencil"></i>
                                     Edit &amp; Approve
@@ -148,15 +197,21 @@
                                     <div class="ae-field">
                                         <label class="ae-label">Date</label>
                                         <input
-                                            v-model="editingApprovalItem.data.date"
+                                            v-model="
+                                                editingApprovalItem.data.date
+                                            "
                                             type="date"
                                             class="form-control form-control-sm"
                                         />
                                     </div>
                                     <div class="ae-field">
-                                        <label class="ae-label">Amount (₹)</label>
+                                        <label class="ae-label"
+                                            >Amount (₹)</label
+                                        >
                                         <input
-                                            v-model="editingApprovalItem.data.amount"
+                                            v-model="
+                                                editingApprovalItem.data.amount
+                                            "
                                             type="number"
                                             step="0.01"
                                             min="0"
@@ -167,10 +222,15 @@
                                     <div class="ae-field">
                                         <label class="ae-label">Category</label>
                                         <select
-                                            v-model="editingApprovalItem.data.category_id"
+                                            v-model="
+                                                editingApprovalItem.data
+                                                    .category_id
+                                            "
                                             class="form-select form-select-sm"
                                         >
-                                            <option :value="null" disabled>Select</option>
+                                            <option :value="null" disabled>
+                                                Select
+                                            </option>
                                             <option
                                                 v-for="cat in categories"
                                                 :key="cat.id"
@@ -181,9 +241,14 @@
                                         </select>
                                     </div>
                                     <div class="ae-field">
-                                        <label class="ae-label">Plantation</label>
+                                        <label class="ae-label"
+                                            >Plantation</label
+                                        >
                                         <select
-                                            v-model="editingApprovalItem.data.plantation_id"
+                                            v-model="
+                                                editingApprovalItem.data
+                                                    .plantation_id
+                                            "
                                             class="form-select form-select-sm"
                                         >
                                             <option :value="null">None</option>
@@ -199,7 +264,10 @@
                                     <div class="ae-field">
                                         <label class="ae-label">Vehicle</label>
                                         <select
-                                            v-model="editingApprovalItem.data.vehicle_id"
+                                            v-model="
+                                                editingApprovalItem.data
+                                                    .vehicle_id
+                                            "
                                             class="form-select form-select-sm"
                                         >
                                             <option :value="null">None</option>
@@ -213,9 +281,14 @@
                                         </select>
                                     </div>
                                     <div class="ae-field ae-field-wide">
-                                        <label class="ae-label">Description</label>
+                                        <label class="ae-label"
+                                            >Description</label
+                                        >
                                         <input
-                                            v-model="editingApprovalItem.data.description"
+                                            v-model="
+                                                editingApprovalItem.data
+                                                    .description
+                                            "
                                             type="text"
                                             class="form-control form-control-sm"
                                             placeholder="Optional"
@@ -225,7 +298,9 @@
                                 <div class="approval-edit-btns">
                                     <button
                                         class="btn-action-sm btn-approve"
-                                        @click="submitApproveWithEdits(req.id, idx)"
+                                        @click="
+                                            submitApproveWithEdits(req.id, idx)
+                                        "
                                     >
                                         <i class="bi bi-check-lg"></i>
                                         Save &amp; Approve
@@ -246,9 +321,9 @@
         </div>
 
         <!-- ══════════════════════════════════════════════ -->
-        <!-- FILTER BAR                                     -->
+        <!-- TOOLBAR (search + filters button)             -->
         <!-- ══════════════════════════════════════════════ -->
-        <div class="filter-bar animate-fade-in-up animate-delay-2">
+        <div class="toolbar animate-fade-in-up animate-delay-2">
             <div class="search-wrap">
                 <i class="bi bi-search search-icon"></i>
                 <input
@@ -259,58 +334,108 @@
                     @input="fetchExpenses"
                 />
             </div>
-            <select
-                v-model="filters.category_id"
-                class="form-select filter-select"
-                @change="fetchExpenses"
-            >
-                <option :value="null">All Categories</option>
-                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                    {{ cat.name }}
-                </option>
-            </select>
-            <select
-                v-model="filters.plantation_id"
-                class="form-select filter-select"
-                @change="fetchExpenses"
-            >
-                <option :value="null">All Plantations</option>
-                <option v-for="pl in plantations" :key="pl.id" :value="pl.id">
-                    {{ pl.name }}
-                </option>
-            </select>
-            <select
-                v-model="filters.vehicle_id"
-                class="form-select filter-select"
-                @change="fetchExpenses"
-            >
-                <option :value="null">All Vehicles</option>
-                <option v-for="veh in vehicles" :key="veh.id" :value="veh.id">
-                    {{ veh.number }}
-                </option>
-            </select>
-            <input
-                v-model="filters.from_date"
-                type="date"
-                class="form-control filter-date"
-                placeholder="From date"
-                @change="fetchExpenses"
-            />
-            <input
-                v-model="filters.to_date"
-                type="date"
-                class="form-control filter-date"
-                placeholder="To date"
-                @change="fetchExpenses"
-            />
-            <button
-                v-if="hasActiveFilters"
-                class="btn-filter-clear"
-                title="Clear filters"
-                @click="clearFilters"
-            >
-                <i class="bi bi-x-circle"></i>
-            </button>
+
+            <!-- Filters button + floating popover -->
+            <div class="filter-btn-wrap" ref="filterBtnWrap">
+                <button
+                    class="btn-filters"
+                    :class="{ active: filterPanelOpen }"
+                    @click="filterPanelOpen = !filterPanelOpen"
+                >
+                    <i class="bi bi-sliders"></i>
+                    Filters
+                    <span v-if="activeFilterCount > 0" class="filter-badge">{{
+                        activeFilterCount
+                    }}</span>
+                </button>
+
+                <div v-if="filterPanelOpen" class="filter-popover">
+                    <div class="fp-header">
+                        <span class="fp-title">Filters</span>
+                        <button
+                            v-if="hasActiveFilters"
+                            class="fp-clear"
+                            @click="clearFilters"
+                        >
+                            Clear all
+                        </button>
+                    </div>
+
+                    <div class="fp-field">
+                        <label class="fp-label">Category</label>
+                        <select
+                            v-model="filters.category_id"
+                            class="form-select form-select-sm"
+                            @change="fetchExpenses"
+                        >
+                            <option :value="null">All Categories</option>
+                            <option
+                                v-for="cat in categories"
+                                :key="cat.id"
+                                :value="cat.id"
+                            >
+                                {{ cat.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="fp-field">
+                        <label class="fp-label">Plantation</label>
+                        <select
+                            v-model="filters.plantation_id"
+                            class="form-select form-select-sm"
+                            @change="fetchExpenses"
+                        >
+                            <option :value="null">All Plantations</option>
+                            <option
+                                v-for="pl in plantations"
+                                :key="pl.id"
+                                :value="pl.id"
+                            >
+                                {{ pl.name }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="fp-field">
+                        <label class="fp-label">Vehicle</label>
+                        <select
+                            v-model="filters.vehicle_id"
+                            class="form-select form-select-sm"
+                            @change="fetchExpenses"
+                        >
+                            <option :value="null">All Vehicles</option>
+                            <option
+                                v-for="veh in vehicles"
+                                :key="veh.id"
+                                :value="veh.id"
+                            >
+                                {{ veh.number }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="fp-field">
+                        <label class="fp-label">From date</label>
+                        <input
+                            v-model="filters.from_date"
+                            type="date"
+                            class="form-control form-control-sm"
+                            @change="fetchExpenses"
+                        />
+                    </div>
+
+                    <div class="fp-field">
+                        <label class="fp-label">To date</label>
+                        <input
+                            v-model="filters.to_date"
+                            type="date"
+                            class="form-control form-control-sm"
+                            @change="fetchExpenses"
+                        />
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- ══════════════════════════════════════════════ -->
@@ -319,16 +444,29 @@
         <div class="content-panel animate-fade-in-up animate-delay-3">
             <div v-if="expenses.length === 0" class="empty-state">
                 <i class="bi bi-receipt"></i>
-                <p>{{ hasActiveFilters ? "No expenses match your filters" : "No expenses recorded yet" }}</p>
+                <p>
+                    {{
+                        hasActiveFilters
+                            ? "No expenses match your filters"
+                            : "No expenses recorded yet"
+                    }}
+                </p>
             </div>
 
             <TransitionGroup v-else name="list" tag="div" class="expenses-list">
                 <div v-for="exp in expenses" :key="exp.id" class="expense-row">
                     <div class="expense-date">{{ formatDate(exp.date) }}</div>
                     <div class="expense-main">
-                        <span class="badge-category">{{ categoryName(exp.category_id) }}</span>
-                        <span class="expense-amount">₹{{ formatMoney(exp.amount) }}</span>
-                        <span v-if="exp.description" class="expense-description">
+                        <span class="badge-category">{{
+                            categoryName(exp.category_id)
+                        }}</span>
+                        <span class="expense-amount"
+                            >₹{{ formatMoney(exp.amount) }}</span
+                        >
+                        <span
+                            v-if="exp.description"
+                            class="expense-description"
+                        >
                             {{ exp.description }}
                         </span>
                     </div>
@@ -382,7 +520,11 @@
                 <span>My Expense Requests</span>
             </div>
 
-            <div v-for="req in myRequests" :key="req.id" class="my-request-card">
+            <div
+                v-for="req in myRequests"
+                :key="req.id"
+                class="my-request-card"
+            >
                 <div class="my-request-top">
                     <div class="my-request-meta">
                         <span class="my-request-date">
@@ -390,10 +532,15 @@
                             {{ formatDate(req.created_at) }}
                         </span>
                         <span class="my-request-count">
-                            {{ req.items?.length || 0 }} item{{ (req.items?.length || 0) !== 1 ? "s" : "" }}
+                            {{ req.items?.length || 0 }} item{{
+                                (req.items?.length || 0) !== 1 ? "s" : ""
+                            }}
                         </span>
                     </div>
-                    <span class="status-chip" :class="statusChipClass(req.status)">
+                    <span
+                        class="status-chip"
+                        :class="statusChipClass(req.status)"
+                    >
                         {{ req.status }}
                     </span>
                 </div>
@@ -404,23 +551,23 @@
                         :key="idx"
                         class="my-request-item"
                     >
-                        <span class="mri-date">{{ formatDate(item.data?.date) }}</span>
-                        <span class="mri-amount">₹{{ formatMoney(item.data?.amount) }}</span>
-                        <span class="mri-category">{{ categoryName(item.data?.category_id) }}</span>
+                        <span class="mri-date">{{
+                            formatDate(item.data?.date)
+                        }}</span>
+                        <span class="mri-amount"
+                            >₹{{ formatMoney(item.data?.amount) }}</span
+                        >
+                        <span class="mri-category">{{
+                            categoryName(item.data?.category_id)
+                        }}</span>
                         <span v-if="item.data?.description" class="mri-desc">
                             {{ item.data.description }}
                         </span>
-                        <span
-                            v-if="item.data?.plantation_id"
-                            class="mri-tag"
-                        >
+                        <span v-if="item.data?.plantation_id" class="mri-tag">
                             <i class="bi bi-geo-alt"></i>
                             {{ plantationName(item.data.plantation_id) }}
                         </span>
-                        <span
-                            v-if="item.data?.vehicle_id"
-                            class="mri-tag"
-                        >
+                        <span v-if="item.data?.vehicle_id" class="mri-tag">
                             <i class="bi bi-truck"></i>
                             {{ vehicleNumber(item.data.vehicle_id) }}
                         </span>
@@ -459,18 +606,35 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content form-modal">
                     <div class="modal-body">
-                        <div class="modal-icon" :class="editingExpense ? 'icon-edit' : 'icon-add'">
-                            <i class="bi" :class="editingExpense ? 'bi-pencil' : 'bi-plus-lg'"></i>
+                        <div
+                            class="modal-icon"
+                            :class="editingExpense ? 'icon-edit' : 'icon-add'"
+                        >
+                            <i
+                                class="bi"
+                                :class="
+                                    editingExpense ? 'bi-pencil' : 'bi-plus-lg'
+                                "
+                            ></i>
                         </div>
                         <h5 class="modal-title">
-                            {{ editingExpense ? "Edit Expense" : "Add Expense" }}
+                            {{
+                                editingExpense ? "Edit Expense" : "Add Expense"
+                            }}
                         </h5>
-                        <p v-if="expenseFormError" class="form-error">{{ expenseFormError }}</p>
+                        <p v-if="expenseFormError" class="form-error">
+                            {{ expenseFormError }}
+                        </p>
 
-                        <form class="expense-form" @submit.prevent="saveExpense">
+                        <form
+                            class="expense-form"
+                            @submit.prevent="saveExpense"
+                        >
                             <div class="form-row">
                                 <div class="form-group flex-1">
-                                    <label class="form-label" for="eDate">Date *</label>
+                                    <label class="form-label" for="eDate"
+                                        >Date *</label
+                                    >
                                     <input
                                         id="eDate"
                                         v-model="expenseForm.date"
@@ -480,7 +644,9 @@
                                     />
                                 </div>
                                 <div class="form-group flex-1">
-                                    <label class="form-label" for="eAmount">Amount (₹) *</label>
+                                    <label class="form-label" for="eAmount"
+                                        >Amount (₹) *</label
+                                    >
                                     <input
                                         id="eAmount"
                                         v-model="expenseForm.amount"
@@ -494,22 +660,32 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label class="form-label" for="eCategory">Category *</label>
+                                <label class="form-label" for="eCategory"
+                                    >Category *</label
+                                >
                                 <select
                                     id="eCategory"
                                     v-model="expenseForm.category_id"
                                     class="form-select"
                                     required
                                 >
-                                    <option :value="null" disabled>Select category</option>
-                                    <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                                    <option :value="null" disabled>
+                                        Select category
+                                    </option>
+                                    <option
+                                        v-for="cat in categories"
+                                        :key="cat.id"
+                                        :value="cat.id"
+                                    >
                                         {{ cat.name }}
                                     </option>
                                 </select>
                             </div>
                             <div class="form-row">
                                 <div class="form-group flex-1">
-                                    <label class="form-label" for="ePlantation">Plantation</label>
+                                    <label class="form-label" for="ePlantation"
+                                        >Plantation</label
+                                    >
                                     <select
                                         id="ePlantation"
                                         v-model="expenseForm.plantation_id"
@@ -526,7 +702,9 @@
                                     </select>
                                 </div>
                                 <div class="form-group flex-1">
-                                    <label class="form-label" for="eVehicle">Vehicle</label>
+                                    <label class="form-label" for="eVehicle"
+                                        >Vehicle</label
+                                    >
                                     <select
                                         id="eVehicle"
                                         v-model="expenseForm.vehicle_id"
@@ -544,7 +722,9 @@
                                 </div>
                             </div>
                             <div class="form-group">
-                                <label class="form-label" for="eDescription">Description</label>
+                                <label class="form-label" for="eDescription"
+                                    >Description</label
+                                >
                                 <textarea
                                     id="eDescription"
                                     v-model="expenseForm.description"
@@ -569,8 +749,12 @@
                             :disabled="!isExpenseFormValid || saving"
                             @click="saveExpense"
                         >
-                            <span v-if="saving"><i class="bi bi-hourglass-split"></i></span>
-                            <span v-else>{{ editingExpense ? "Save Changes" : "Add Expense" }}</span>
+                            <span v-if="saving"
+                                ><i class="bi bi-hourglass-split"></i
+                            ></span>
+                            <span v-else>{{
+                                editingExpense ? "Save Changes" : "Add Expense"
+                            }}</span>
                         </button>
                     </div>
                 </div>
@@ -592,10 +776,18 @@
                             <i class="bi bi-trash"></i>
                         </div>
                         <h5 class="modal-title">Delete Expense</h5>
-                        <p class="modal-desc">
+                        <p v-if="deleteError" class="form-error">
+                            {{ deleteError }}
+                        </p>
+                        <p v-else class="modal-desc">
                             This will permanently remove the expense of
-                            <strong>₹{{ deletingExpense ? formatMoney(deletingExpense.amount) : "" }}</strong>.
-                            This action cannot be undone.
+                            <strong
+                                >₹{{
+                                    deletingExpense
+                                        ? formatMoney(deletingExpense.amount)
+                                        : ""
+                                }}</strong
+                            >. This action cannot be undone.
                         </p>
                     </div>
                     <div class="modal-footer">
@@ -607,6 +799,7 @@
                             Cancel
                         </button>
                         <button
+                            v-if="!deleteError"
                             type="button"
                             class="btn-modal btn-modal-confirm btn-modal-danger"
                             @click="deleteExpense"
@@ -641,7 +834,9 @@
                                 class="request-row-item"
                             >
                                 <div class="request-row-header">
-                                    <span class="request-row-num">Expense {{ idx + 1 }}</span>
+                                    <span class="request-row-num"
+                                        >Expense {{ idx + 1 }}</span
+                                    >
                                     <button
                                         v-if="requestRows.length > 1"
                                         type="button"
@@ -654,7 +849,9 @@
                                 <div class="request-row-fields">
                                     <div class="form-row-sm">
                                         <div class="form-group flex-1">
-                                            <label class="form-label">Date *</label>
+                                            <label class="form-label"
+                                                >Date *</label
+                                            >
                                             <input
                                                 v-model="row.date"
                                                 type="date"
@@ -662,7 +859,9 @@
                                             />
                                         </div>
                                         <div class="form-group flex-1">
-                                            <label class="form-label">Amount (₹) *</label>
+                                            <label class="form-label"
+                                                >Amount (₹) *</label
+                                            >
                                             <input
                                                 v-model="row.amount"
                                                 type="number"
@@ -673,12 +872,16 @@
                                             />
                                         </div>
                                         <div class="form-group flex-1">
-                                            <label class="form-label">Category *</label>
+                                            <label class="form-label"
+                                                >Category *</label
+                                            >
                                             <select
                                                 v-model="row.category_id"
                                                 class="form-select form-select-sm"
                                             >
-                                                <option :value="null" disabled>Select</option>
+                                                <option :value="null" disabled>
+                                                    Select
+                                                </option>
                                                 <option
                                                     v-for="cat in categories"
                                                     :key="cat.id"
@@ -691,12 +894,16 @@
                                     </div>
                                     <div class="form-row-sm">
                                         <div class="form-group flex-1">
-                                            <label class="form-label">Plantation</label>
+                                            <label class="form-label"
+                                                >Plantation</label
+                                            >
                                             <select
                                                 v-model="row.plantation_id"
                                                 class="form-select form-select-sm"
                                             >
-                                                <option :value="null">None</option>
+                                                <option :value="null">
+                                                    None
+                                                </option>
                                                 <option
                                                     v-for="pl in plantations"
                                                     :key="pl.id"
@@ -707,12 +914,16 @@
                                             </select>
                                         </div>
                                         <div class="form-group flex-1">
-                                            <label class="form-label">Vehicle</label>
+                                            <label class="form-label"
+                                                >Vehicle</label
+                                            >
                                             <select
                                                 v-model="row.vehicle_id"
                                                 class="form-select form-select-sm"
                                             >
-                                                <option :value="null">None</option>
+                                                <option :value="null">
+                                                    None
+                                                </option>
                                                 <option
                                                     v-for="veh in vehicles"
                                                     :key="veh.id"
@@ -723,7 +934,9 @@
                                             </select>
                                         </div>
                                         <div class="form-group flex-1-wide">
-                                            <label class="form-label">Description</label>
+                                            <label class="form-label"
+                                                >Description</label
+                                            >
                                             <input
                                                 v-model="row.description"
                                                 type="text"
@@ -736,13 +949,19 @@
                             </div>
                         </div>
 
-                        <button type="button" class="btn-add-row" @click="addRequestRow">
+                        <button
+                            type="button"
+                            class="btn-add-row"
+                            @click="addRequestRow"
+                        >
                             <i class="bi bi-plus-lg"></i>
                             Add Another Expense
                         </button>
 
                         <div class="form-group mt-3">
-                            <label class="form-label" for="reqNotes">Request Notes</label>
+                            <label class="form-label" for="reqNotes"
+                                >Request Notes</label
+                            >
                             <textarea
                                 id="reqNotes"
                                 v-model="requestNotes"
@@ -789,7 +1008,9 @@
                             <i class="bi bi-x-circle"></i>
                         </div>
                         <h5 class="modal-title">Reject Item</h5>
-                        <p class="modal-desc">Provide a reason for rejection (optional).</p>
+                        <p class="modal-desc">
+                            Provide a reason for rejection (optional).
+                        </p>
                         <textarea
                             v-model="rejectNote"
                             class="form-control mt-2"
@@ -824,6 +1045,18 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Modal } from "bootstrap";
 import api from "../utils/api";
 import { useAuthStore } from "../stores/auth";
+
+// ── v-click-outside for filter popover ───────────────
+
+// ── Filter popover state ──────────────────────────────
+const filterPanelOpen = ref(false);
+const filterBtnWrap = ref(null);
+
+function onDocumentClick(e) {
+    if (filterBtnWrap.value && !filterBtnWrap.value.contains(e.target)) {
+        filterPanelOpen.value = false;
+    }
+}
 
 // ── Auth ─────────────────────────────────────────────
 const auth = useAuthStore();
@@ -886,7 +1119,14 @@ const requestModalRef = ref(null);
 let bsRequestModal = null;
 const requestNotes = ref("");
 const requestRows = ref([
-    { date: "", amount: "", category_id: null, plantation_id: null, vehicle_id: null, description: "" },
+    {
+        date: "",
+        amount: "",
+        category_id: null,
+        plantation_id: null,
+        vehicle_id: null,
+        description: "",
+    },
 ]);
 
 const isRequestFormValid = computed(() => {
@@ -895,7 +1135,7 @@ const isRequestFormValid = computed(() => {
             r.date !== "" &&
             String(r.amount).trim() !== "" &&
             Number(r.amount) > 0 &&
-            r.category_id !== null
+            r.category_id !== null,
     );
 });
 
@@ -909,19 +1149,35 @@ let bsRejectModal = null;
 
 // ── Computed ─────────────────────────────────────────
 const pendingApprovals = computed(() =>
-    approvals.value.filter((a) => a.status === "PENDING" || a.status === "PARTIAL")
+    approvals.value.filter(
+        (a) => a.status === "PENDING" || a.status === "PARTIAL",
+    ),
 );
 
 const myRequests = computed(() => approvals.value);
 
-const hasActiveFilters = computed(() =>
-    filters.value.search ||
-    filters.value.category_id ||
-    filters.value.plantation_id ||
-    filters.value.vehicle_id ||
-    filters.value.from_date ||
-    filters.value.to_date
+const hasActiveFilters = computed(
+    () =>
+        filters.value.search ||
+        filters.value.category_id ||
+        filters.value.plantation_id ||
+        filters.value.vehicle_id ||
+        filters.value.from_date ||
+        filters.value.to_date,
 );
+
+const activeFilterCount = computed(() => {
+    let count = 0;
+    if (filters.value.category_id) count++;
+    if (filters.value.plantation_id) count++;
+    if (filters.value.vehicle_id) count++;
+    if (filters.value.from_date) count++;
+    if (filters.value.to_date) count++;
+    return count;
+});
+
+// ── Delete state ──────────────────────────────────────
+const deleteError = ref("");
 
 // ── Helpers ──────────────────────────────────────────
 function formatDate(d) {
@@ -939,19 +1195,28 @@ function formatMoney(v) {
     const n = Number(v);
     return isNaN(n)
         ? v
-        : n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        : n.toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+          });
 }
 
 function categoryName(id) {
-    return categories.value.find((c) => c.id === id)?.name || (id ? `#${id}` : "—");
+    return (
+        categories.value.find((c) => c.id === id)?.name || (id ? `#${id}` : "—")
+    );
 }
 
 function plantationName(id) {
-    return id ? (plantations.value.find((p) => p.id === id)?.name || `#${id}`) : null;
+    return id
+        ? plantations.value.find((p) => p.id === id)?.name || `#${id}`
+        : null;
 }
 
 function vehicleNumber(id) {
-    return id ? (vehicles.value.find((v) => v.id === id)?.number || `#${id}`) : null;
+    return id
+        ? vehicles.value.find((v) => v.id === id)?.number || `#${id}`
+        : null;
 }
 
 function statusChipClass(status) {
@@ -969,9 +1234,12 @@ async function fetchExpenses() {
     try {
         const params = {};
         if (filters.value.search) params.search = filters.value.search;
-        if (filters.value.category_id) params.category_id = filters.value.category_id;
-        if (filters.value.plantation_id) params.plantation_id = filters.value.plantation_id;
-        if (filters.value.vehicle_id) params.vehicle_id = filters.value.vehicle_id;
+        if (filters.value.category_id)
+            params.category_id = filters.value.category_id;
+        if (filters.value.plantation_id)
+            params.plantation_id = filters.value.plantation_id;
+        if (filters.value.vehicle_id)
+            params.vehicle_id = filters.value.vehicle_id;
         if (filters.value.from_date) params.from_date = filters.value.from_date;
         if (filters.value.to_date) params.to_date = filters.value.to_date;
         const res = await api.get("/expenses/", { params });
@@ -1058,8 +1326,13 @@ async function saveExpense() {
     };
     try {
         if (editingExpense.value) {
-            const res = await api.put(`/expenses/${editingExpense.value.id}`, payload);
-            const idx = expenses.value.findIndex((e) => e.id === editingExpense.value.id);
+            const res = await api.put(
+                `/expenses/${editingExpense.value.id}`,
+                payload,
+            );
+            const idx = expenses.value.findIndex(
+                (e) => e.id === editingExpense.value.id,
+            );
             if (idx !== -1) expenses.value[idx] = res.data;
         } else {
             const res = await api.post("/expenses/", payload);
@@ -1067,7 +1340,9 @@ async function saveExpense() {
         }
         bsExpenseModal.hide();
     } catch (err) {
-        expenseFormError.value = err.response?.data?.detail || "Failed to save expense. Please try again.";
+        expenseFormError.value =
+            err.response?.data?.detail ||
+            "Failed to save expense. Please try again.";
     } finally {
         saving.value = false;
     }
@@ -1076,6 +1351,7 @@ async function saveExpense() {
 // ── Admin: Delete Expense ────────────────────────────
 function promptDelete(expense) {
     deletingExpense.value = expense;
+    deleteError.value = "";
     if (!bsDeleteModal) bsDeleteModal = new Modal(deleteModalRef.value);
     bsDeleteModal.show();
 }
@@ -1084,10 +1360,17 @@ async function deleteExpense() {
     if (!deletingExpense.value) return;
     try {
         await api.delete(`/expenses/${deletingExpense.value.id}`);
-        expenses.value = expenses.value.filter((e) => e.id !== deletingExpense.value.id);
+        expenses.value = expenses.value.filter(
+            (e) => e.id !== deletingExpense.value.id,
+        );
         bsDeleteModal.hide();
     } catch (err) {
-        console.error("Failed to delete expense:", err);
+        if (err.response?.status === 409) {
+            deleteError.value =
+                err.response.data?.detail || "Cannot delete this expense.";
+        } else {
+            console.error("Failed to delete expense:", err);
+        }
     }
 }
 
@@ -1095,7 +1378,14 @@ async function deleteExpense() {
 function openRequestModal() {
     requestNotes.value = "";
     requestRows.value = [
-        { date: "", amount: "", category_id: null, plantation_id: null, vehicle_id: null, description: "" },
+        {
+            date: "",
+            amount: "",
+            category_id: null,
+            plantation_id: null,
+            vehicle_id: null,
+            description: "",
+        },
     ];
     if (!bsRequestModal) bsRequestModal = new Modal(requestModalRef.value);
     bsRequestModal.show();
@@ -1156,7 +1446,9 @@ function toggleExpanded(requestId) {
 
 async function approveItem(requestId, index) {
     try {
-        await api.patch(`/approvals/${requestId}/items/${index}`, { action: "approve" });
+        await api.patch(`/approvals/${requestId}/items/${index}`, {
+            action: "approve",
+        });
         await fetchApprovals();
         await fetchExpenses();
     } catch (err) {
@@ -1240,10 +1532,12 @@ async function approveAll(requestId) {
 
 // ── Lifecycle ────────────────────────────────────────
 onMounted(async () => {
+    document.addEventListener("click", onDocumentClick, true);
     await Promise.all([fetchExpenses(), fetchLookups(), fetchApprovals()]);
 });
 
 onBeforeUnmount(() => {
+    document.removeEventListener("click", onDocumentClick, true);
     bsExpenseModal?.dispose();
     bsDeleteModal?.dispose();
     bsRequestModal?.dispose();
@@ -1323,13 +1617,14 @@ onBeforeUnmount(() => {
     box-shadow: 0 4px 12px rgba(181, 105, 77, 0.25);
 }
 
-/* ── Filter Bar ───────────────────────────────────── */
-.filter-bar {
+/* ── Toolbar ──────────────────────────────────────── */
+.toolbar {
     display: flex;
     gap: 10px;
     margin-bottom: 16px;
-    flex-wrap: wrap;
     align-items: center;
+    position: relative;
+    z-index: 10;
 }
 
 .search-wrap {
@@ -1353,32 +1648,105 @@ onBeforeUnmount(() => {
     font-size: 0.85rem;
 }
 
-.filter-select {
-    min-width: 160px;
-    font-size: 0.85rem;
+/* Filters button */
+.filter-btn-wrap {
+    position: relative;
     flex-shrink: 0;
 }
 
-.filter-date {
-    min-width: 140px;
-    font-size: 0.85rem;
-    flex-shrink: 0;
+.btn-filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--border-light);
+    border-radius: 10px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.83rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
 }
 
-.btn-filter-clear {
+.btn-filters:hover,
+.btn-filters.active {
+    border-color: var(--moss);
+    color: var(--moss);
+    background: rgba(138, 154, 123, 0.06);
+}
+
+.filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 20px;
+    background: var(--moss);
+    color: var(--white);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Floating filter popover */
+.filter-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 260px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    padding: 14px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.fp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.fp-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.fp-clear {
     border: none;
     background: transparent;
-    color: var(--text-secondary);
-    font-size: 1.1rem;
+    color: var(--sienna);
+    font-size: 0.78rem;
     cursor: pointer;
-    padding: 4px 6px;
-    border-radius: 7px;
-    transition: color var(--transition-fast);
-    flex-shrink: 0;
+    padding: 0;
 }
 
-.btn-filter-clear:hover {
-    color: var(--sienna);
+.fp-clear:hover {
+    text-decoration: underline;
+}
+
+.fp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fp-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 
 /* ── Content Panel ────────────────────────────────── */

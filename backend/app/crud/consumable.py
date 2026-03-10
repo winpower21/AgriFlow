@@ -1,19 +1,46 @@
 from decimal import Decimal
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from ..models.consumables import Consumable, ConsumablePurchase
+from ..models.consumables import Consumable, ConsumableCategory, ConsumableConsumption, ConsumablePurchase, ConsumptionAllocation
 from ..models.expense import Expense, ExpenseCategory
-from ..schemas.consumable import ConsumableCreate, ConsumablePurchaseCreate, ConsumableUpdate
+from ..schemas.consumable import ConsumableCategoryCreate, ConsumableCreate, ConsumablePurchaseCreate, ConsumableUpdate
 
 
 class ConsumableService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_all(self, search: Optional[str] = None) -> List[Consumable]:
+    # ── Categories ────────────────────────────────────────────────────────────
+
+    def get_all_categories(self) -> List[ConsumableCategory]:
+        return self.db.query(ConsumableCategory).order_by(ConsumableCategory.name).all()
+
+    def get_category_by_id(self, category_id: int) -> Optional[ConsumableCategory]:
+        return self.db.query(ConsumableCategory).filter(ConsumableCategory.id == category_id).first()
+
+    def create_category(self, data: ConsumableCategoryCreate) -> ConsumableCategory:
+        obj = ConsumableCategory(**data.model_dump())
+        self.db.add(obj)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
+    def delete_category(self, category_id: int) -> bool:
+        obj = self.get_category_by_id(category_id)
+        if not obj:
+            return False
+        self.db.delete(obj)
+        self.db.commit()
+        return True
+
+    # ── Consumable items ──────────────────────────────────────────────────────
+
+    def get_all(self, search: Optional[str] = None, category_id: Optional[int] = None) -> List[Consumable]:
         q = self.db.query(Consumable)
         if search:
             q = q.filter(Consumable.name.ilike(f"%{search}%"))
+        if category_id:
+            q = q.filter(Consumable.category_id == category_id)
         return q.order_by(Consumable.name).all()
 
     def get_by_id(self, consumable_id: int) -> Optional[Consumable]:
@@ -99,3 +126,55 @@ class ConsumableService:
         total_purchased = sum((p.quantity for p in purchases), Decimal("0"))
         total_remaining = sum((p.remaining_quantity for p in purchases), Decimal("0"))
         return {"total_purchased": total_purchased, "total_remaining": total_remaining}
+
+    def delete_purchase(self, purchase_id: int) -> Optional[str]:
+        """Delete a purchase lot.
+
+        Returns:
+            None on success.
+            "not_found" if the purchase doesn't exist.
+            "has_allocations" if the lot has been partially/fully consumed (FIFO locks it).
+        """
+        purchase = self.db.query(ConsumablePurchase).filter(ConsumablePurchase.id == purchase_id).first()
+        if not purchase:
+            return "not_found"
+        has_alloc = self.db.query(ConsumptionAllocation).filter(
+            ConsumptionAllocation.purchase_id == purchase_id
+        ).first()
+        if has_alloc:
+            return "has_allocations"
+        # Delete the linked auto-generated expense if present
+        if purchase.expense_id:
+            expense = self.db.query(Expense).filter(Expense.id == purchase.expense_id).first()
+            if expense:
+                self.db.delete(expense)
+        self.db.delete(purchase)
+        self.db.commit()
+        return None
+
+    def delete_consumable(self, consumable_id: int) -> Optional[str]:
+        """Delete a consumable item and cascade to its purchases + linked expenses.
+
+        Returns:
+            None on success.
+            "not_found" if the consumable doesn't exist.
+            "has_consumptions" if any consumption records exist (item has been used).
+        """
+        consumable = self.get_by_id(consumable_id)
+        if not consumable:
+            return "not_found"
+        has_consumption = self.db.query(ConsumableConsumption).filter(
+            ConsumableConsumption.consumable_id == consumable_id
+        ).first()
+        if has_consumption:
+            return "has_consumptions"
+        # Cascade: delete each purchase and its linked expense
+        for purchase in list(consumable.purchases):
+            if purchase.expense_id:
+                expense = self.db.query(Expense).filter(Expense.id == purchase.expense_id).first()
+                if expense:
+                    self.db.delete(expense)
+            self.db.delete(purchase)
+        self.db.delete(consumable)
+        self.db.commit()
+        return None

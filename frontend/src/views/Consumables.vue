@@ -60,14 +60,23 @@
                 <span class="tab-label">Purchases</span>
                 <span class="tab-count">{{ purchases.length }}</span>
             </button>
+            <button
+                class="tab-btn"
+                :class="{ active: activeTab === 'categories' }"
+                @click="activeTab = 'categories'"
+            >
+                <i class="bi bi-tags"></i>
+                <span class="tab-label">Categories</span>
+                <span class="tab-count">{{ categories.length }}</span>
+            </button>
         </div>
 
         <!-- ══════════════════════════════════════════════ -->
         <!-- ITEMS TAB                                      -->
         <!-- ══════════════════════════════════════════════ -->
         <div v-if="activeTab === 'items'" class="animate-fade-in-up animate-delay-2">
-            <!-- Search bar -->
-            <div class="filter-bar">
+            <!-- Toolbar -->
+            <div class="toolbar">
                 <div class="search-wrap">
                     <i class="bi bi-search search-icon"></i>
                     <input
@@ -78,13 +87,37 @@
                         @input="fetchItems"
                     />
                 </div>
+                <div class="filter-btn-wrap" ref="itemFilterBtnWrap">
+                    <button
+                        class="btn-filters"
+                        :class="{ active: itemFilterOpen }"
+                        @click="itemFilterOpen = !itemFilterOpen"
+                    >
+                        <i class="bi bi-sliders"></i>
+                        Filters
+                        <span v-if="filterCategoryId" class="filter-badge">1</span>
+                    </button>
+                    <div v-if="itemFilterOpen" class="filter-popover">
+                        <div class="fp-header">
+                            <span class="fp-title">Filters</span>
+                            <button v-if="filterCategoryId" class="fp-clear" @click="filterCategoryId = null; fetchItems()">Clear all</button>
+                        </div>
+                        <div class="fp-field">
+                            <label class="fp-label">Category</label>
+                            <select v-model="filterCategoryId" class="form-select form-select-sm" @change="fetchItems">
+                                <option :value="null">All Categories</option>
+                                <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Items list -->
             <div class="content-panel">
                 <div v-if="items.length === 0" class="empty-state">
                     <i class="bi bi-box-seam"></i>
-                    <p>No consumable items found</p>
+                    <p>{{ filterCategoryId ? 'No items match the selected category' : 'No consumable items found' }}</p>
                 </div>
 
                 <div v-else class="items-list">
@@ -98,6 +131,9 @@
                             <span class="item-id">#{{ item.id }}</span>
                             <span class="item-name">{{ item.name }}</span>
                             <span class="badge-unit">{{ item.unit }}</span>
+                            <span v-if="item.category_id" class="badge-category">
+                                {{ categoryName(item.category_id) }}
+                            </span>
                             <span
                                 class="status-chip"
                                 :class="item.is_active ? 'status-active' : 'status-inactive'"
@@ -137,6 +173,13 @@
                                     class="bi"
                                     :class="item.is_active ? 'bi-pause-circle' : 'bi-play-circle'"
                                 ></i>
+                            </button>
+                            <button
+                                class="btn-action btn-delete"
+                                title="Delete"
+                                @click="promptDeleteItem(item)"
+                            >
+                                <i class="bi bi-trash"></i>
                             </button>
                         </div>
                     </div>
@@ -305,35 +348,40 @@
                 </div>
             </div>
 
-            <!-- Filter bar -->
-            <div class="filter-bar">
-                <select
-                    v-model="filterConsumableId"
-                    class="form-select filter-select"
-                    @change="fetchPurchases"
-                >
-                    <option :value="null">All Consumables</option>
-                    <option v-for="ci in items" :key="ci.id" :value="ci.id">
-                        {{ ci.name }}
-                    </option>
-                </select>
-                <input
-                    v-model="filterFromDate"
-                    type="date"
-                    class="form-control filter-date"
-                    placeholder="From date"
-                    @change="fetchPurchases"
-                />
-                <input
-                    v-model="filterToDate"
-                    type="date"
-                    class="form-control filter-date"
-                    placeholder="To date"
-                    @change="fetchPurchases"
-                />
-                <button class="btn-filter-clear" @click="clearFilters" title="Clear filters">
-                    <i class="bi bi-x-circle"></i>
-                </button>
+            <!-- Purchases Toolbar -->
+            <div class="toolbar">
+                <div class="filter-btn-wrap" ref="purchaseFilterBtnWrap" style="margin-left: auto">
+                    <button
+                        class="btn-filters"
+                        :class="{ active: purchaseFilterOpen }"
+                        @click="purchaseFilterOpen = !purchaseFilterOpen"
+                    >
+                        <i class="bi bi-sliders"></i>
+                        Filters
+                        <span v-if="purchaseActiveFilterCount > 0" class="filter-badge">{{ purchaseActiveFilterCount }}</span>
+                    </button>
+                    <div v-if="purchaseFilterOpen" class="filter-popover">
+                        <div class="fp-header">
+                            <span class="fp-title">Filters</span>
+                            <button v-if="purchaseActiveFilterCount > 0" class="fp-clear" @click="clearFilters">Clear all</button>
+                        </div>
+                        <div class="fp-field">
+                            <label class="fp-label">Consumable</label>
+                            <select v-model="filterConsumableId" class="form-select form-select-sm" @change="fetchPurchases">
+                                <option :value="null">All Consumables</option>
+                                <option v-for="ci in items" :key="ci.id" :value="ci.id">{{ ci.name }}</option>
+                            </select>
+                        </div>
+                        <div class="fp-field">
+                            <label class="fp-label">From date</label>
+                            <input v-model="filterFromDate" type="date" class="form-control form-control-sm" @change="fetchPurchases" />
+                        </div>
+                        <div class="fp-field">
+                            <label class="fp-label">To date</label>
+                            <input v-model="filterToDate" type="date" class="form-control form-control-sm" @change="fetchPurchases" />
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Purchases list -->
@@ -356,6 +404,7 @@
                                     <th class="th-num">Remaining</th>
                                     <th>Supplier</th>
                                     <th>Invoice</th>
+                                    <th v-if="isAdmin"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -371,13 +420,18 @@
                                     <td class="num-cell">
                                         <span
                                             class="remaining-chip"
-                                            :class="remainingClass(p.quantity_remaining, p.quantity)"
+                                            :class="remainingClass(p.remaining_quantity, p.quantity)"
                                         >
-                                            {{ formatQty(p.quantity_remaining) }}
+                                            {{ formatQty(p.remaining_quantity) }}
                                         </span>
                                     </td>
                                     <td class="secondary-cell">{{ p.supplier || "—" }}</td>
                                     <td class="secondary-cell">{{ p.invoice_number || "—" }}</td>
+                                    <td v-if="isAdmin" class="action-cell">
+                                        <button class="btn-action btn-delete" title="Delete" @click="promptDeletePurchase(p)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -416,6 +470,11 @@
                                 <span v-if="p.invoice_number">
                                     <i class="bi bi-file-text"></i> {{ p.invoice_number }}
                                 </span>
+                            </div>
+                            <div v-if="isAdmin" class="purchase-card-actions">
+                                <button class="btn-action btn-delete" title="Delete" @click="promptDeletePurchase(p)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -471,6 +530,63 @@
         </div>
 
         <!-- ══════════════════════════════════════════════ -->
+        <!-- CATEGORIES TAB                                 -->
+        <!-- ══════════════════════════════════════════════ -->
+        <div v-if="activeTab === 'categories'" class="animate-fade-in-up animate-delay-2">
+            <div class="content-panel categories-panel">
+                <!-- Empty state -->
+                <div v-if="categories.length === 0 && !isAdmin" class="empty-state">
+                    <i class="bi bi-tags"></i>
+                    <p>No categories have been created yet.</p>
+                </div>
+
+                <!-- Category list -->
+                <div v-if="categories.length > 0" class="categories-list">
+                    <div v-for="cat in categories" :key="cat.id" class="category-row">
+                        <div class="cat-info">
+                            <span class="cat-name">{{ cat.name }}</span>
+                            <span v-if="cat.description" class="cat-desc">{{ cat.description }}</span>
+                        </div>
+                        <button
+                            v-if="isAdmin"
+                            class="btn-action btn-delete"
+                            title="Delete category"
+                            @click="deleteCategory(cat.id)"
+                        >
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Add new category form (admin only) -->
+                <div v-if="isAdmin" class="cat-add-form">
+                    <p v-if="categoryFormError" class="form-error">{{ categoryFormError }}</p>
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label class="form-label">Name</label>
+                            <input v-model="newCategoryName" type="text" class="form-control" placeholder="e.g. Pesticides" />
+                        </div>
+                        <div class="form-group flex-1">
+                            <label class="form-label">Description <span style="opacity:0.6;font-weight:400">(optional)</span></label>
+                            <input v-model="newCategoryDesc" type="text" class="form-control" placeholder="Short description" />
+                        </div>
+                        <div class="form-group" style="align-self:flex-end">
+                            <button
+                                type="button"
+                                class="btn-add"
+                                :disabled="!newCategoryName.trim()"
+                                @click="submitCategory"
+                            >
+                                <i class="bi bi-plus-lg"></i>
+                                <span>Add Category</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════ -->
         <!-- MODALS                                         -->
         <!-- ══════════════════════════════════════════════ -->
 
@@ -515,6 +631,13 @@
                                     placeholder="e.g. kg, L, bags"
                                     required
                                 />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="ciCategory">Category</label>
+                                <select id="ciCategory" v-model="itemForm.category_id" class="form-select">
+                                    <option :value="null">No category</option>
+                                    <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                                </select>
                             </div>
                             <div class="form-group">
                                 <label class="form-label" for="ciDesc">Description</label>
@@ -790,6 +913,66 @@
             </div>
         </div>
 
+        <!-- Delete Item Confirm Modal -->
+        <div
+            class="modal fade"
+            id="deleteItemModal"
+            tabindex="-1"
+            aria-hidden="true"
+            ref="deleteItemModalRef"
+        >
+            <div class="modal-dialog modal-dialog-centered modal-sm">
+                <div class="modal-content confirm-modal">
+                    <div class="modal-body">
+                        <div class="modal-icon icon-delete">
+                            <i class="bi bi-trash"></i>
+                        </div>
+                        <h5 class="modal-title">Delete Item</h5>
+                        <p class="modal-desc">
+                            Delete <strong>{{ deletingItem?.name }}</strong>?
+                            This cannot be undone.
+                        </p>
+                        <p v-if="deleteItemError" class="form-error mt-2">{{ deleteItemError }}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn-modal btn-modal-confirm btn-modal-danger" @click="deleteItem">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Purchase Confirm Modal -->
+        <div
+            class="modal fade"
+            id="deletePurchaseModal"
+            tabindex="-1"
+            aria-hidden="true"
+            ref="deletePurchaseModalRef"
+        >
+            <div class="modal-dialog modal-dialog-centered modal-sm">
+                <div class="modal-content confirm-modal">
+                    <div class="modal-body">
+                        <div class="modal-icon icon-delete">
+                            <i class="bi bi-trash"></i>
+                        </div>
+                        <h5 class="modal-title">Delete Purchase</h5>
+                        <p class="modal-desc">
+                            Delete the purchase of
+                            <strong>{{ consumableName(deletingPurchase?.consumable_id) }}</strong>
+                            on {{ formatDate(deletingPurchase?.purchase_date) }}?
+                            This cannot be undone.
+                        </p>
+                        <p v-if="deletePurchaseError" class="form-error mt-2">{{ deletePurchaseError }}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-modal btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn-modal btn-modal-confirm btn-modal-danger" @click="deletePurchase">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Reject Prompt Modal -->
         <div
             class="modal fade"
@@ -850,12 +1033,18 @@ const activeTab = ref("items");
 // ── Items tab state ──────────────────────────────────
 const items = ref([]);
 const searchItems = ref("");
+const itemFilterOpen = ref(false);
+const filterCategoryId = ref(null);
+
+// ── Categories ────────────────────────────────────────
+const categories = ref([]);
 
 // ── Purchases tab state ──────────────────────────────
 const purchases = ref([]);
 const filterConsumableId = ref(null);
 const filterFromDate = ref("");
 const filterToDate = ref("");
+const purchaseFilterOpen = ref(false);
 
 // ── Approval state ───────────────────────────────────
 const approvals = ref([]);
@@ -871,14 +1060,31 @@ const itemModalRef = ref(null);
 const purchaseModalRef = ref(null);
 const requestModalRef = ref(null);
 const rejectModalRef = ref(null);
+const deleteItemModalRef = ref(null);
+const deletePurchaseModalRef = ref(null);
 let bsItemModal = null;
 let bsPurchaseModal = null;
 let bsRequestModal = null;
 let bsRejectModal = null;
+let bsDeleteItemModal = null;
+let bsDeletePurchaseModal = null;
+
+// ── Category form ─────────────────────────────────────
+const newCategoryName = ref("");
+const newCategoryDesc = ref("");
+const categoryFormError = ref("");
+
+// ── Delete item state ─────────────────────────────────
+const deletingItem = ref(null);
+const deleteItemError = ref("");
+
+// ── Delete purchase state ─────────────────────────────
+const deletingPurchase = ref(null);
+const deletePurchaseError = ref("");
 
 // ── Item form ────────────────────────────────────────
 const editingItem = ref(null);
-const itemForm = ref({ name: "", unit: "", description: "" });
+const itemForm = ref({ name: "", unit: "", description: "", category_id: null });
 const itemFormError = ref("");
 
 // ── Purchase form ────────────────────────────────────
@@ -930,6 +1136,14 @@ const pendingApprovals = computed(() =>
 
 const myRequests = computed(() => approvals.value);
 
+const purchaseActiveFilterCount = computed(() => {
+    let count = 0;
+    if (filterConsumableId.value) count++;
+    if (filterFromDate.value) count++;
+    if (filterToDate.value) count++;
+    return count;
+});
+
 // ── Helpers ──────────────────────────────────────────
 function formatDate(d) {
     return d
@@ -943,6 +1157,10 @@ function formatDate(d) {
 
 function consumableName(id) {
     return items.value.find((i) => i.id === id)?.name || (id ? `#${id}` : "—");
+}
+
+function categoryName(id) {
+    return categories.value.find((c) => c.id === id)?.name || "";
 }
 
 function formatQty(v) {
@@ -985,10 +1203,20 @@ async function fetchItems() {
     try {
         const params = {};
         if (searchItems.value) params.search = searchItems.value;
+        if (filterCategoryId.value) params.category_id = filterCategoryId.value;
         const res = await api.get("/consumables/", { params });
         items.value = res.data;
     } catch (err) {
         console.error("Failed to fetch consumables:", err);
+    }
+}
+
+async function fetchCategories() {
+    try {
+        const res = await api.get("/consumable-categories/");
+        categories.value = res.data;
+    } catch (err) {
+        console.error("Failed to fetch categories:", err);
     }
 }
 
@@ -1021,14 +1249,90 @@ function clearFilters() {
     fetchPurchases();
 }
 
+// ── Categories ───────────────────────────────────────
+async function submitCategory() {
+    categoryFormError.value = "";
+    if (!newCategoryName.value.trim()) return;
+    try {
+        const res = await api.post("/consumable-categories/", {
+            name: newCategoryName.value.trim(),
+            description: newCategoryDesc.value.trim() || null,
+        });
+        categories.value.push(res.data);
+        newCategoryName.value = "";
+        newCategoryDesc.value = "";
+    } catch (err) {
+        categoryFormError.value = err.response?.data?.detail || "Failed to create category.";
+    }
+}
+
+async function deleteCategory(id) {
+    try {
+        await api.delete(`/consumable-categories/${id}`);
+        categories.value = categories.value.filter((c) => c.id !== id);
+        // Clear filter if the deleted category was selected
+        if (filterCategoryId.value === id) {
+            filterCategoryId.value = null;
+            fetchItems();
+        }
+    } catch (err) {
+        console.error("Failed to delete category:", err);
+    }
+}
+
+// ── Delete Item ──────────────────────────────────────
+function promptDeleteItem(item) {
+    deletingItem.value = item;
+    deleteItemError.value = "";
+    if (!bsDeleteItemModal) bsDeleteItemModal = new Modal(deleteItemModalRef.value);
+    bsDeleteItemModal.show();
+}
+
+async function deleteItem() {
+    if (!deletingItem.value) return;
+    deleteItemError.value = "";
+    try {
+        await api.delete(`/consumables/${deletingItem.value.id}`);
+        items.value = items.value.filter((i) => i.id !== deletingItem.value.id);
+        bsDeleteItemModal.hide();
+        deletingItem.value = null;
+    } catch (err) {
+        deleteItemError.value =
+            err.response?.data?.detail || "Failed to delete item. Please try again.";
+    }
+}
+
+// ── Delete Purchase ──────────────────────────────────
+function promptDeletePurchase(purchase) {
+    deletingPurchase.value = purchase;
+    deletePurchaseError.value = "";
+    if (!bsDeletePurchaseModal) bsDeletePurchaseModal = new Modal(deletePurchaseModalRef.value);
+    bsDeletePurchaseModal.show();
+}
+
+async function deletePurchase() {
+    if (!deletingPurchase.value) return;
+    deletePurchaseError.value = "";
+    try {
+        await api.delete(`/consumables/purchases/${deletingPurchase.value.id}`);
+        purchases.value = purchases.value.filter((p) => p.id !== deletingPurchase.value.id);
+        bsDeletePurchaseModal.hide();
+        deletingPurchase.value = null;
+        await fetchItems(); // refresh stock totals
+    } catch (err) {
+        deletePurchaseError.value =
+            err.response?.data?.detail || "Failed to delete purchase. Please try again.";
+    }
+}
+
 // ── Item Modal ───────────────────────────────────────
 function openItemModal(item) {
     editingItem.value = item;
     itemFormError.value = "";
     if (item) {
-        itemForm.value = { name: item.name, unit: item.unit, description: item.description || "" };
+        itemForm.value = { name: item.name, unit: item.unit, description: item.description || "", category_id: item.category_id ?? null };
     } else {
-        itemForm.value = { name: "", unit: "", description: "" };
+        itemForm.value = { name: "", unit: "", description: "", category_id: null };
     }
     if (!bsItemModal) bsItemModal = new Modal(itemModalRef.value);
     bsItemModal.show();
@@ -1042,6 +1346,7 @@ async function submitItemForm() {
             name: itemForm.value.name.trim(),
             unit: itemForm.value.unit.trim(),
             description: itemForm.value.description.trim() || null,
+            category_id: itemForm.value.category_id || null,
         };
         if (editingItem.value) {
             const res = await api.put(`/consumables/${editingItem.value.id}`, payload);
@@ -1269,7 +1574,7 @@ async function approveAll(requestId) {
 
 // ── Lifecycle ────────────────────────────────────────
 onMounted(async () => {
-    await Promise.all([fetchItems(), fetchPurchases(), fetchApprovals()]);
+    await Promise.all([fetchCategories(), fetchItems(), fetchPurchases(), fetchApprovals()]);
 });
 
 onBeforeUnmount(() => {
@@ -1277,6 +1582,8 @@ onBeforeUnmount(() => {
     bsPurchaseModal?.dispose();
     bsRequestModal?.dispose();
     bsRejectModal?.dispose();
+    bsDeleteItemModal?.dispose();
+    bsDeletePurchaseModal?.dispose();
 });
 </script>
 
@@ -1420,13 +1727,123 @@ onBeforeUnmount(() => {
     color: var(--moss);
 }
 
-/* ── Filter Bar ─────────────────────────────── */
+/* ── Toolbar / Filter Bar ───────────────────── */
+.toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+    position: relative;
+    z-index: 10;
+}
+
 .filter-bar {
     display: flex;
     gap: 10px;
     margin-bottom: 16px;
     flex-wrap: wrap;
     align-items: center;
+}
+
+/* Filters button */
+.filter-btn-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.btn-filters {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1.5px solid var(--border-light);
+    border-radius: 10px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 0.83rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-filters:hover,
+.btn-filters.active {
+    border-color: var(--moss);
+    color: var(--moss);
+    background: rgba(138, 154, 123, 0.06);
+}
+
+.filter-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 20px;
+    background: var(--moss);
+    color: var(--white);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* Floating filter popover */
+.filter-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 260px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    box-shadow: var(--shadow-md);
+    padding: 14px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.fp-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.fp-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.fp-clear {
+    border: none;
+    background: transparent;
+    color: var(--sienna);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 0;
+}
+
+.fp-clear:hover {
+    text-decoration: underline;
+}
+
+.fp-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.fp-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .search-wrap {
@@ -2490,6 +2907,80 @@ onBeforeUnmount(() => {
 
 .mt-3 {
     margin-top: 1rem;
+}
+
+/* ── Category badge ─────────────────────────── */
+.badge-category {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(196, 163, 90, 0.14);
+    color: #8a6f2a;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ── Category Modal ──────────────────────────── */
+.categories-list {
+    overflow: hidden;
+}
+
+.category-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border-light);
+    transition: background var(--transition-fast);
+}
+
+.category-row:hover {
+    background: rgba(138, 154, 123, 0.04);
+}
+
+.category-row:last-child {
+    border-bottom: none;
+}
+
+.cat-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.cat-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: block;
+}
+
+.cat-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cat-empty {
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.cat-add-form {
+    border-top: 1px solid var(--border-light);
+    padding: 16px 18px;
+}
+
+.categories-panel .cat-add-form {
+    padding: 16px 18px;
 }
 
 /* ── Responsive ─────────────────────────────── */

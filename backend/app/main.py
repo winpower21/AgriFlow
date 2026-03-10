@@ -125,6 +125,7 @@ app.include_router(locations_router)        # /locations — location search and
 app.include_router(expense.router)          # /expenses — expense tracking
 app.include_router(settings_route.router)   # /settings — application settings
 app.include_router(consumable.router)       # /consumables — consumable items and purchases
+app.include_router(consumable.categories_router)  # /consumable-categories
 app.include_router(vehicle.router)          # /vehicles — vehicle management
 app.include_router(general.router)          # /general — shared/utility endpoints
 app.include_router(weather_google.router)       # /api/weather — pass-through to Google API

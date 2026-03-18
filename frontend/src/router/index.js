@@ -74,6 +74,36 @@ const routes = [
         component: () => import("@/views/Expenses.vue"),
         meta: { layout: "app", requiresAuth: true },
     },
+    {
+        path: "/batches",
+        name: "batches",
+        component: () => import("@/views/Batches.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
+    {
+        path: "/batches/:id",
+        name: "batch-detail",
+        component: () => import("@/views/BatchDetail.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
+    {
+        path: "/transformations",
+        name: "transformations",
+        component: () => import("@/views/Transformations.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
+    {
+        path: "/transformations/:id",
+        name: "transformation-detail",
+        component: () => import("@/views/TransformationDetail.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
+    {
+        path: "/sales",
+        name: "sales",
+        component: () => import("@/views/Sales.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
 ];
 
 const router = createRouter({

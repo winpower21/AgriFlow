@@ -25,14 +25,16 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, List
 
-from sqlalchemy import ForeignKey, Numeric, String, UniqueConstraint, func
+from sqlalchemy import ForeignKey, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.sqltypes import Boolean
 
 from ..database import Base
 
 if TYPE_CHECKING:
     from .batch import Batch
     from .consumables import ConsumableConsumption
+    from .expense import Expense
     from .personnel import TransformationPersonnel
     from .transformation import Transformation
     from .vehicle import TransformationVehicle
@@ -57,8 +59,14 @@ class TransformationType(Base):
 
     __tablename__ = "transformation_types"
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True)  # Type identifier, e.g. "CLEAN", "DRY", "GRADE"
-    description: Mapped[str] = mapped_column(String(1000), nullable=True)  # Optional description of what this transformation type involves
+    name: Mapped[str] = mapped_column(
+        String(100), unique=True
+    )  # Type identifier, e.g. "CLEAN", "DRY", "GRADE"
+    is_root: Mapped[bool] = mapped_column(Boolean, default=False)
+    # transformation_stage_level: Mapped[int] = mapped_column(Integer)
+    description: Mapped[str] = mapped_column(
+        String(1000), nullable=True
+    )  # Optional description of what this transformation type involves
 
     # All transformation events of this type
     transformations: Mapped[List["Transformation"]] = relationship(
@@ -86,9 +94,15 @@ class Transformation(Base):
     __tablename__ = "transformations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    type_id: Mapped[int] = mapped_column(ForeignKey("transformation_types.id"))  # FK to TransformationType (e.g., CLEAN, DRY)
-    from_date: Mapped[datetime] = mapped_column(index=True)  # Processing start date; indexed for date-range queries
-    to_date: Mapped[datetime] = mapped_column(index=True)  # Processing end date; indexed for date-range queries
+    type_id: Mapped[int] = mapped_column(
+        ForeignKey("transformation_types.id")
+    )  # FK to TransformationType (e.g., CLEAN, DRY)
+    from_date: Mapped[datetime] = mapped_column(
+        index=True
+    )  # Processing start date; indexed for date-range queries
+    to_date: Mapped[datetime | None] = mapped_column(
+        index=True, nullable=True
+    )  # Processing end date; null means in-progress
     notes: Mapped[str | None] = mapped_column(String(1000))  # Free-text operator notes
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -118,6 +132,10 @@ class Transformation(Base):
     # The type/category of this transformation
     transformation_type: Mapped["TransformationType"] = relationship(
         back_populates="transformations"
+    )
+    # Expenses linked to this transformation (wages, additional costs)
+    expenses: Mapped[List["Expense"]] = relationship(
+        "Expense", back_populates="transformation"
     )
 
     def __repr__(self) -> str:
@@ -153,11 +171,17 @@ class TransformationInput(Base):
     transformation_id: Mapped[int] = mapped_column(
         ForeignKey("transformations.id"), index=True
     )  # FK to the parent transformation event
-    batch_id: Mapped[int] = mapped_column(ForeignKey("batches.id"), index=True)  # FK to the batch being consumed
-    input_weight: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # Weight (kg) consumed from this batch in this transformation
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("batches.id"), index=True
+    )  # FK to the batch being consumed
+    input_weight: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2)
+    )  # Weight (kg) consumed from this batch in this transformation
 
     transformation: Mapped["Transformation"] = relationship(back_populates="inputs")
-    batch: Mapped["Batch"] = relationship(back_populates="transformation_inputs")  # The batch that was consumed
+    batch: Mapped["Batch"] = relationship(
+        back_populates="transformation_inputs"
+    )  # The batch that was consumed
 
     def __repr__(self) -> str:
         return f"<TransformationInput(transformation_id={self.transformation_id}, batch_id={self.batch_id}, weight={self.input_weight}kg)>"
@@ -189,11 +213,17 @@ class TransformationOutput(Base):
     transformation_id: Mapped[int] = mapped_column(
         ForeignKey("transformations.id"), index=True
     )  # FK to the parent transformation event
-    batch_id: Mapped[int] = mapped_column(ForeignKey("batches.id"), index=True)  # FK to the newly produced batch
-    output_weight: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # Weight (kg) of material produced in this output batch
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("batches.id"), index=True
+    )  # FK to the newly produced batch
+    output_weight: Mapped[Decimal] = mapped_column(
+        Numeric(10, 2)
+    )  # Weight (kg) of material produced in this output batch
 
     transformation: Mapped["Transformation"] = relationship(back_populates="outputs")
-    batch: Mapped["Batch"] = relationship(back_populates="transformation_outputs")  # The batch that was produced
+    batch: Mapped["Batch"] = relationship(
+        back_populates="transformation_outputs"
+    )  # The batch that was produced
 
     def __repr__(self) -> str:
         return f"<TransformationOutput(transformation_id={self.transformation_id}, batch_id={self.batch_id}, weight={self.output_weight}kg)>"

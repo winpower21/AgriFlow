@@ -19,7 +19,7 @@ Wage Calculation:
 
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import ForeignKey, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -27,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .expense import Expense
     from .transformation import Transformation
 
 
@@ -174,8 +175,13 @@ class TransformationPersonnel(Base):
         String(100)
     )  # Description of what the additional payment covers
 
-    # Total wage paid for this assignment (frozen, pre-computed)
-    wage_paid: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    # Wage computation fields
+    base_wage: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    total_wages_payable: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    is_paid: Mapped[bool] = mapped_column(default=False)
+    expense_id: Mapped[int | None] = mapped_column(
+        ForeignKey("expenses.id", ondelete="SET NULL"), nullable=True
+    )
 
     notes: Mapped[str | None] = mapped_column(
         String(500)
@@ -192,6 +198,8 @@ class TransformationPersonnel(Base):
     wage_type: Mapped[WageType] = relationship(
         back_populates="transformation_wage_type_at_time"
     )
+    # Linked expense record for wage payment tracking
+    expense: Mapped[Optional["Expense"]] = relationship("Expense")
 
     def __repr__(self) -> str:
-        return f"<TransformationPersonnel(personnel='{self.personnel.name}', rate={self.rate_at_time}, wage={self.wage_paid})>"
+        return f"<TransformationPersonnel(personnel='{self.personnel.name}', rate={self.rate_at_time}, base_wage={self.base_wage})>"

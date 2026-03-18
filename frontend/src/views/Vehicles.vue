@@ -37,7 +37,7 @@
                 <div v-for="v in vehicles" :key="v.id" class="vehicle-row">
                     <div class="vehicle-info">
                         <div class="vehicle-number">{{ v.number }}</div>
-                        <div class="vehicle-type">{{ v.vehicle_type || '—' }}</div>
+                        <div class="vehicle-type">{{ v.vehicle_type || '—' }}<span v-if="v.fuel_consumable_name" class="fuel-name"> · ⛽ {{ v.fuel_consumable_name }}</span></div>
                     </div>
                     <div class="vehicle-meta">
                         <span class="status-badge" :class="v.is_active ? 'badge-active' : 'badge-inactive'">
@@ -80,6 +80,13 @@
                             <label class="form-label">Vehicle Type</label>
                             <input v-model="form.vehicle_type" type="text" class="form-control" placeholder="e.g. Tractor, Truck, Van" />
                         </div>
+                        <div class="form-group">
+                            <label class="form-label">Fuel Consumable (optional)</label>
+                            <select v-model="form.fuel_consumable_id" class="form-control form-select">
+                                <option :value="null">— None —</option>
+                                <option v-for="c in allConsumables" :key="c.id" :value="c.id">{{ c.name }} ({{ c.unit }})</option>
+                            </select>
+                        </div>
                         <p v-if="formError" class="form-error">{{ formError }}</p>
                     </div>
                     <div class="agri-modal-footer">
@@ -113,7 +120,8 @@ const formError = ref("");
 const vehicleModalRef = ref(null);
 let bsModal = null;
 const editingVehicle = ref(null);
-const form = ref({ number: "", vehicle_type: "" });
+const form = ref({ number: "", vehicle_type: "", fuel_consumable_id: null });
+const allConsumables = ref([]);
 
 async function fetchVehicles() {
     const params = {};
@@ -127,18 +135,30 @@ async function fetchVehicles() {
     }
 }
 
-function openAddModal() {
+async function fetchConsumables() {
+    if (allConsumables.value.length) return;
+    try {
+        const res = await api.get("/consumables/");
+        allConsumables.value = res.data;
+    } catch (err) {
+        console.error("Failed to fetch consumables:", err);
+    }
+}
+
+async function openAddModal() {
     editingVehicle.value = null;
-    form.value = { number: "", vehicle_type: "" };
+    form.value = { number: "", vehicle_type: "", fuel_consumable_id: null };
     formError.value = "";
+    await fetchConsumables();
     if (!bsModal) bsModal = new Modal(vehicleModalRef.value);
     bsModal.show();
 }
 
-function openEdit(v) {
+async function openEdit(v) {
     editingVehicle.value = v;
-    form.value = { number: v.number, vehicle_type: v.vehicle_type || "" };
+    form.value = { number: v.number, vehicle_type: v.vehicle_type || "", fuel_consumable_id: v.fuel_consumable_id || null };
     formError.value = "";
+    await fetchConsumables();
     if (!bsModal) bsModal = new Modal(vehicleModalRef.value);
     bsModal.show();
 }
@@ -150,6 +170,7 @@ async function saveVehicle() {
     const payload = {
         number: form.value.number.trim(),
         vehicle_type: form.value.vehicle_type.trim() || null,
+        fuel_consumable_id: form.value.fuel_consumable_id || null,
     };
     try {
         if (editingVehicle.value) {
@@ -229,6 +250,7 @@ onBeforeUnmount(() => bsModal?.dispose());
 .vehicle-info { flex: 1; min-width: 0; }
 .vehicle-number { font-weight: 600; font-size: 0.95rem; color: var(--text-primary); }
 .vehicle-type { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+.fuel-name { font-size: 0.78rem; color: var(--text-secondary); }
 
 .vehicle-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 

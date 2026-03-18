@@ -56,8 +56,10 @@ class BatchStageCreate(BaseModel):
 
     Fields:
         name: Label for the stage (e.g. 'HARVEST', 'CLEAN', 'DRY').
+        is_salable: Whether batches at this stage can be sold.
     """
     name: str
+    is_salable: bool = False
 
 
 class BatchStageUpdate(BaseModel):
@@ -66,6 +68,7 @@ class BatchStageUpdate(BaseModel):
     All fields are optional; only supplied fields are modified.
     """
     name: Optional[str] = None
+    is_salable: Optional[bool] = None
 
 
 class BatchStageSchema(BaseModel):
@@ -74,9 +77,11 @@ class BatchStageSchema(BaseModel):
     Fields:
         id:   Server-generated primary key.
         name: Human-readable label for the processing stage.
+        is_salable: Whether batches at this stage can be sold.
     """
     id: int
     name: str
+    is_salable: bool
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -211,8 +211,11 @@ def update_expense_category(cat_id: int, data: ExpenseCategoryUpdate, db: Sessio
 def delete_expense_category(cat_id: int, db: Session = Depends(get_db)):
     """Delete an expense category."""
     service = SettingsService(db)
-    if not service.delete_expense_category(cat_id):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Expense category not found")
+    result = service.delete_expense_category(cat_id)
+    if result == "not_found":
+        raise HTTPException(status_code=404, detail="Expense category not found")
+    if result == "system_category":
+        raise HTTPException(status_code=400, detail="Cannot delete system expense category")
 
 
 # ── App Config ────────────────────────────────────────────────────────────────

@@ -1055,6 +1055,10 @@ const editingApprovalItem = ref(null); // { requestId, index, data }
 const rejectTarget = ref(null); // { requestId, index }
 const rejectNote = ref("");
 
+// ── Filter wrapper refs ───────────────────────────────
+const itemFilterBtnWrap = ref(null);
+const purchaseFilterBtnWrap = ref(null);
+
 // ── Modal refs ───────────────────────────────────────
 const itemModalRef = ref(null);
 const purchaseModalRef = ref(null);
@@ -1572,12 +1576,24 @@ async function approveAll(requestId) {
     }
 }
 
+// ── Click-outside handler ────────────────────────────
+function handleClickOutside(e) {
+    if (itemFilterOpen.value && itemFilterBtnWrap.value && !itemFilterBtnWrap.value.contains(e.target)) {
+        itemFilterOpen.value = false;
+    }
+    if (purchaseFilterOpen.value && purchaseFilterBtnWrap.value && !purchaseFilterBtnWrap.value.contains(e.target)) {
+        purchaseFilterOpen.value = false;
+    }
+}
+
 // ── Lifecycle ────────────────────────────────────────
 onMounted(async () => {
     await Promise.all([fetchCategories(), fetchItems(), fetchPurchases(), fetchApprovals()]);
+    document.addEventListener('click', handleClickOutside);
 });
 
 onBeforeUnmount(() => {
+    document.removeEventListener('click', handleClickOutside);
     bsItemModal?.dispose();
     bsPurchaseModal?.dispose();
     bsRequestModal?.dispose();

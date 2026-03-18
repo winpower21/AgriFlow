@@ -150,6 +150,7 @@ class ConsumableConsumption(Base):
 
     consumption_date: Mapped[datetime] = mapped_column(index=True)
     quantity_used: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    is_vehicle_fuel: Mapped[bool] = mapped_column(default=False)
 
     # Total cost is calculated from allocations and FROZEN
     total_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2))

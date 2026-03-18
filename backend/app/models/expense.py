@@ -9,6 +9,7 @@ from ..database import Base
 
 if TYPE_CHECKING:
     from .plantation import Plantation
+    from .transformation import Transformation
     from .vehicle import Vehicle
 
 
@@ -20,6 +21,7 @@ class ExpenseCategory(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(String(500))
+    is_system: Mapped[bool] = mapped_column(default=False)
 
     expenses: Mapped[List["Expense"]] = relationship(back_populates="category")
 
@@ -44,6 +46,9 @@ class Expense(Base):
     # Optional links to assets
     plantation_id: Mapped[int | None] = mapped_column(ForeignKey("plantations.id"))
     vehicle_id: Mapped[int | None] = mapped_column(ForeignKey("vehicles.id"))
+    transformation_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transformations.id", ondelete="SET NULL"), nullable=True
+    )
 
     description: Mapped[str | None] = mapped_column(String(1000))
     receipt_image: Mapped[str | None] = mapped_column(String(500))  # Path to image
@@ -57,6 +62,9 @@ class Expense(Base):
     category: Mapped["ExpenseCategory"] = relationship(back_populates="expenses")
     plantation: Mapped[Optional["Plantation"]] = relationship("Plantation")
     vehicle: Mapped[Optional["Vehicle"]] = relationship("Vehicle")
+    transformation: Mapped[Optional["Transformation"]] = relationship(
+        "Transformation", back_populates="expenses"
+    )
 
     def __repr__(self) -> str:
         category_name = self.category.name if self.category else "Unknown"

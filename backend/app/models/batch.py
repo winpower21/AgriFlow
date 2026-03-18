@@ -32,14 +32,14 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 
-from sqlalchemy import ForeignKey, Numeric, String, func
+from sqlalchemy import ForeignKey, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..database import Base
 
 if TYPE_CHECKING:
     from .plantation import Plantation
-    from .sales import RetailInventory
+    from .sales import SaleAllocation
     from .transformation import TransformationInput, TransformationOutput
 
 
@@ -75,12 +75,31 @@ class BatchStage(Base):
     name: Mapped[str] = mapped_column(
         String(255), nullable=False
     )  # Stage label, e.g. "HARVESTED", "GRADED_A", "RETAIL"
+    batch_stage_level: Mapped[int] = mapped_column(Integer, nullable=True)
+    is_salable: Mapped[bool] = mapped_column(default=False)
     batches: Mapped[List["Batch"]] = relationship(
         "Batch", back_populates="stage"
     )  # All batches currently at this stage
 
     def __repr__(self) -> str:
         return f"<BatchStage(id={self.id}, name='{self.name}')>"
+
+
+class BatchParent(Base):
+    """Many-to-many genealogy: tracks parent-child batch relationships."""
+
+    __tablename__ = "batch_parents"
+    __table_args__ = (
+        UniqueConstraint("child_batch_id", "parent_batch_id", name="uq_batch_parent"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    child_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("batches.id", ondelete="CASCADE"), index=True
+    )
+    parent_batch_id: Mapped[int] = mapped_column(
+        ForeignKey("batches.id", ondelete="CASCADE"), index=True
+    )
 
 
 class Batch(Base):
@@ -92,9 +111,9 @@ class Batch(Base):
     transformation (linked to a parent batch). Batches are consumed as inputs to
     subsequent transformations or sold at the RETAIL stage.
 
-    Lineage tracking: The ``parent_batch_id`` self-FK creates a tree that traces
-    every retail batch back through its full processing history to the original
-    plantation harvest.
+    Lineage tracking: The ``batch_parents`` join table (via ``parent_links`` /
+    ``child_links``) creates a DAG that traces every retail batch back through its
+    full processing history to the original plantation harvest.
     """
 
     __tablename__ = "batches"
@@ -115,12 +134,13 @@ class Batch(Base):
     remaining_weight_kg: Mapped[Decimal] = mapped_column(
         Numeric(10, 2)
     )  # Current unconsumed weight; decreases as batch is used in transformations
+    cost_per_kg: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2), nullable=True
+    )  # Production cost/kg, frozen at transformation completion
     is_depleted: Mapped[bool] = mapped_column(
         default=False, index=True
     )  # True when remaining_weight_kg reaches 0; indexed for fast filtering of active batches
-    parent_batch_id: Mapped[int | None] = mapped_column(
-        ForeignKey("batches.id")
-    )  # Self-FK for lineage: points to the batch this was derived from
+    notes: Mapped[str | None] = mapped_column(String(1000))  # Optional free-text notes
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
@@ -129,13 +149,16 @@ class Batch(Base):
     # Source plantation (only for HARVEST-stage batches)
     plantation: Mapped[Optional["Plantation"]] = relationship(back_populates="batches")
 
-    # Self-referential relationship: the batch this one was produced from
-    parent_batch: Mapped[Optional["Batch"]] = relationship(
-        "Batch", remote_side=[id], back_populates="child_batches"
+    # Many-to-many genealogy via batch_parents table
+    parent_links: Mapped[List["BatchParent"]] = relationship(
+        "BatchParent",
+        foreign_keys="BatchParent.child_batch_id",
+        cascade="all, delete-orphan",
     )
-    # Self-referential relationship: batches produced from this one
-    child_batches: Mapped[List["Batch"]] = relationship(
-        "Batch", back_populates="parent_batch", remote_side=[parent_batch_id]
+    child_links: Mapped[List["BatchParent"]] = relationship(
+        "BatchParent",
+        foreign_keys="BatchParent.parent_batch_id",
+        cascade="all",  # No delete-orphan: lifecycle owned by child batch, not parent
     )
 
     # Transformations where this batch was consumed as an input
@@ -147,13 +170,13 @@ class Batch(Base):
         back_populates="batch", cascade="all, delete-orphan"
     )
 
-    # Retail inventory record (1-to-1); only exists for RETAIL-stage batches
-    retail_inventory: Mapped[Optional["RetailInventory"]] = relationship(
-        back_populates="batch", uselist=False
+    # Sale allocations where this batch's stock was sold
+    sale_allocations: Mapped[List["SaleAllocation"]] = relationship(
+        back_populates="batch", cascade="all, delete-orphan"
     )
     # Current processing stage reference
     stage: Mapped[Optional["BatchStage"]] = relationship(back_populates="batches")
 
     def __repr__(self) -> str:
         stage_name = self.stage.name if self.stage else "Unknown"
-        return f"<Batch(id={self.id}, code='{self.batch_code}', stage={stage_name}, weight={self.weight_kg}kg)>"
+        return f"<Batch(id={self.id}, code='{self.batch_code}', stage={stage_name}, weight={self.remaining_weight_kg}kg)>"

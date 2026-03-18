@@ -255,14 +255,16 @@ class SettingsService:
         self.db.refresh(obj)
         return obj
 
-    def delete_expense_category(self, cat_id: int) -> bool:
-        """Delete an expense category by ID.  Returns False if not found."""
+    def delete_expense_category(self, cat_id: int):
+        """Delete an expense category by ID.  Returns None on success or an error string."""
         obj = self.get_expense_category(cat_id)
         if not obj:
-            return False
+            return "not_found"
+        if obj.is_system:
+            return "system_category"
         self.db.delete(obj)
         self.db.commit()
-        return True
+        return None
 
     # ── App Config ────────────────────────────────────────────────────────────
     # Single-key/value settings for runtime-configurable scalar values

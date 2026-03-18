@@ -21,8 +21,9 @@ Domain Model Overview:
     - Consumable / ConsumablePurchase / ConsumableConsumption / ConsumptionAllocation:
       Consumable inventory with FIFO (First-In-First-Out) costing via purchase lot
       allocation.
-    - RetailInventory / Sale / SaleAllocation: Retail sales with FIFO cost-of-goods-sold
-      allocation from inventory lots.
+    - Customer: Customer records for tracking sale recipients.
+    - Sale / SaleAllocation: Retail sales allocated directly against batches with
+      FIFO or manual cost-of-goods-sold allocation.
     - ExpenseCategory / Expense: General overhead expenses optionally linked to
       plantations or vehicles.
     - Location: Geographic coordinates tied to plantations.
@@ -31,7 +32,7 @@ Domain Model Overview:
 """
 
 from ..database import Base
-from .batch import Batch, BatchStage
+from .batch import Batch, BatchParent, BatchStage
 from .consumables import (
     Consumable,
     ConsumableCategory,
@@ -43,7 +44,8 @@ from .expense import Expense, ExpenseCategory
 from .location import Location
 from .personnel import Personnel, TransformationPersonnel, WageType
 from .plantation import Plantation, PlantationLease
-from .sales import RetailInventory, Sale, SaleAllocation
+from .customer import Customer
+from .sales import Sale, SaleAllocation
 from .transformation import (
     Transformation,
     TransformationInput,
@@ -72,6 +74,7 @@ __all__ = [
     "ConsumableCategory",
     "Consumable",
     "Batch",
+    "BatchParent",
     "BatchStage",
     "TransformationType",
     "Transformation",
@@ -82,9 +85,9 @@ __all__ = [
     "ConsumableConsumption",
     "ConsumptionAllocation",
     "TransformationVehicle",
+    "Customer",
     "Sale",
     "SaleAllocation",
-    "RetailInventory",
     "Expense",
     "ExpenseCategory",
     "Location",

@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import ForeignKey, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .consumables import Consumable
     from .transformation import Transformation
 
 
@@ -22,10 +23,14 @@ class Vehicle(Base):
 
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    fuel_consumable_id: Mapped[int | None] = mapped_column(
+        ForeignKey("consumables.id"), nullable=True
+    )
 
     usage: Mapped[List["TransformationVehicle"]] = relationship(
         back_populates="vehicle"
     )
+    fuel_consumable: Mapped[Optional["Consumable"]] = relationship("Consumable")
 
     def __repr__(self) -> str:
         return f"<Vehicle(id={self.id}, number='{self.number}')>"
@@ -36,11 +41,7 @@ class TransformationVehicle(Base):
 
     __tablename__ = "transformation_vehicles"
 
-    __table_args__ = (
-        UniqueConstraint(
-            "transformation_id", "vehicle_id", name="uq_transformation_vehicle"
-        ),
-    )
+    # No unique constraint — same vehicle may be assigned multiple times (e.g. multiple shifts)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     transformation_id: Mapped[int] = mapped_column(
@@ -48,11 +49,13 @@ class TransformationVehicle(Base):
     )
     vehicle_id: Mapped[int] = mapped_column(ForeignKey("vehicles.id"), index=True)
     hours_used: Mapped[Decimal] = mapped_column(Numeric(8, 2))
-    fuel_consumed: Mapped[Decimal] = mapped_column(Numeric(8, 2))
+    fuel_qty: Mapped[Decimal] = mapped_column(Numeric(8, 2))
 
     # Cost tracking (FROZEN at time of usage)
-    cost_per_hour: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
-    total_cost: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    fuel_cost: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    consumable_consumption_id: Mapped[int | None] = mapped_column(
+        ForeignKey("consumable_consumptions.id", ondelete="SET NULL"), nullable=True
+    )
 
     notes: Mapped[str | None] = mapped_column(String(500))
 
@@ -62,4 +65,4 @@ class TransformationVehicle(Base):
     vehicle: Mapped["Vehicle"] = relationship(back_populates="usage")
 
     def __repr__(self) -> str:
-        return f"<TransformationVehicle(vehicle='{self.vehicle.number}', hours={self.hours_used})>"
+        return f"<TransformationVehicle(vehicle='{self.vehicle.number}', hours={self.hours_used}, fuel_qty={self.fuel_qty})>"

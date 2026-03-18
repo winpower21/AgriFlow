@@ -80,6 +80,10 @@
                         placeholder="Description (optional)"
                         @keydown.enter="handleAdd"
                     />
+                    <label v-if="isBatchStages" class="salable-toggle">
+                        <input type="checkbox" v-model="newItem.is_salable" />
+                        <span class="salable-label">Salable</span>
+                    </label>
                 </div>
                 <button
                     class="btn-add"
@@ -110,6 +114,7 @@
                             >
                                 {{ item.description }}
                             </span>
+                            <span v-if="isBatchStages && item.is_salable" class="salable-badge">Salable</span>
                         </div>
                         <div class="item-actions">
                             <button
@@ -150,6 +155,10 @@
                                 @keydown.enter="saveEdit"
                                 @keydown.escape="cancelEdit"
                             />
+                            <label v-if="isBatchStages" class="salable-toggle">
+                                <input type="checkbox" v-model="editForm.is_salable" />
+                                <span class="salable-label">Salable</span>
+                            </label>
                         </div>
                         <div class="item-actions">
                             <button
@@ -286,6 +295,8 @@ const hasDescription = computed(() => {
     );
 });
 
+const isBatchStages = computed(() => activeTab.value === "batchStages");
+
 // ── Data ────────────────────────────────────────────
 
 const transformationTypes = ref([]);
@@ -351,7 +362,7 @@ function getRef(key) {
 
 // ── Add ─────────────────────────────────────────────
 
-const newItem = ref({ name: "", description: "" });
+const newItem = ref({ name: "", description: "", is_salable: false });
 
 async function handleAdd() {
     if (!newItem.value.name.trim()) return;
@@ -360,11 +371,14 @@ async function handleAdd() {
     if (hasDescription.value && newItem.value.description.trim()) {
         payload.description = newItem.value.description.trim();
     }
+    if (isBatchStages.value) {
+        payload.is_salable = newItem.value.is_salable;
+    }
 
     try {
         const response = await api.post(getEndpoint(), payload);
         getRef().value.push(response.data);
-        newItem.value = { name: "", description: "" };
+        newItem.value = { name: "", description: "", is_salable: false };
     } catch (error) {
         console.error("Failed to add item:", error);
     }
@@ -373,7 +387,7 @@ async function handleAdd() {
 // ── Inline Edit ─────────────────────────────────────
 
 const editingId = ref(null);
-const editForm = ref({ name: "", description: "" });
+const editForm = ref({ name: "", description: "", is_salable: false });
 const editNameInput = ref(null);
 
 function startEdit(item) {
@@ -381,6 +395,7 @@ function startEdit(item) {
     editForm.value = {
         name: item.name,
         description: item.description || "",
+        is_salable: item.is_salable || false,
     };
     nextTick(() => {
         const inputs = document.querySelectorAll(
@@ -392,7 +407,7 @@ function startEdit(item) {
 
 function cancelEdit() {
     editingId.value = null;
-    editForm.value = { name: "", description: "" };
+    editForm.value = { name: "", description: "", is_salable: false };
 }
 
 async function saveEdit() {
@@ -401,6 +416,9 @@ async function saveEdit() {
     const payload = { name: editForm.value.name.trim() };
     if (hasDescription.value) {
         payload.description = editForm.value.description.trim() || null;
+    }
+    if (isBatchStages.value) {
+        payload.is_salable = editForm.value.is_salable;
     }
 
     try {
@@ -1013,5 +1031,38 @@ onBeforeUnmount(() => {
     max-width: 180px;
     font-size: 0.9rem;
     padding: 8px 12px;
+}
+
+/* ── Salable Toggle & Badge ───────────────────── */
+.salable-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.salable-toggle input[type="checkbox"] {
+    accent-color: var(--moss);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.salable-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.salable-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(74, 103, 65, 0.1);
+    color: var(--moss);
+    flex-shrink: 0;
 }
 </style>

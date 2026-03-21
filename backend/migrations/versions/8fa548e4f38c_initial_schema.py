@@ -1,8 +1,8 @@
-"""core_logic_fixes
+"""initial schema
 
-Revision ID: 8bc7955f0bdb
-Revises: 2b61689ecbac
-Create Date: 2026-03-15 21:38:23.995939
+Revision ID: 8fa548e4f38c
+Revises: 
+Create Date: 2026-03-21 18:36:29.150642
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '8bc7955f0bdb'
-down_revision: Union[str, Sequence[str], None] = '2b61689ecbac'
+revision: str = '8fa548e4f38c'
+down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -29,6 +29,13 @@ def upgrade() -> None:
     op.create_table('batch_stages',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=255), nullable=False),
+    sa.Column('batch_stage_level', sa.Integer(), nullable=True),
+    sa.Column('is_salable', sa.Boolean(), nullable=False),
+    sa.Column('parent_id', sa.Integer(), nullable=True),
+    sa.Column('sort_order', sa.Integer(), server_default='0', nullable=False),
+    sa.Column('icon', sa.String(length=50), nullable=True),
+    sa.Column('color', sa.String(length=7), nullable=True),
+    sa.ForeignKeyConstraint(['parent_id'], ['batch_stages.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_table('consumable_categories',
@@ -39,6 +46,17 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_consumable_categories_name'), 'consumable_categories', ['name'], unique=True)
+    op.create_table('customers',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('name', sa.String(length=200), nullable=False),
+    sa.Column('phone', sa.String(length=20), nullable=False),
+    sa.Column('address', sa.String(length=500), nullable=True),
+    sa.Column('notes', sa.String(length=500), nullable=True),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_customers_name'), 'customers', ['name'], unique=False)
+    op.create_index(op.f('ix_customers_phone'), 'customers', ['phone'], unique=True)
     op.create_table('expense_categories',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
@@ -69,27 +87,12 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_roles_id'), 'roles', ['id'], unique=False)
     op.create_index(op.f('ix_roles_name'), 'roles', ['name'], unique=True)
-    op.create_table('sales',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('sale_date', sa.DateTime(), nullable=False),
-    sa.Column('quantity_sold', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('selling_price', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('cost_of_goods_sold', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('customer_name', sa.String(length=200), nullable=True),
-    sa.Column('customer_phone', sa.String(length=20), nullable=True),
-    sa.Column('customer_address', sa.String(length=500), nullable=True),
-    sa.Column('invoice_number', sa.String(length=100), nullable=True),
-    sa.Column('notes', sa.String(length=500), nullable=True),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index('idx_sale_date', 'sales', ['sale_date'], unique=False)
-    op.create_index(op.f('ix_sales_sale_date'), 'sales', ['sale_date'], unique=False)
     op.create_table('transformation_types',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('is_root', sa.Boolean(), nullable=False),
     sa.Column('description', sa.String(length=1000), nullable=True),
+    sa.Column('measures_personnel_efficiency', sa.Boolean(), server_default='true', nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
@@ -200,6 +203,7 @@ def upgrade() -> None:
     sa.Column('stage_id', sa.Integer(), nullable=True),
     sa.Column('initial_weight_kg', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('remaining_weight_kg', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('cost_per_kg', sa.Numeric(precision=10, scale=2), nullable=True),
     sa.Column('is_depleted', sa.Boolean(), nullable=False),
     sa.Column('notes', sa.String(length=1000), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
@@ -234,10 +238,44 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('start_date', sa.DateTime(), nullable=False),
     sa.Column('end_date', sa.DateTime(), nullable=True),
-    sa.Column('cost', sa.Numeric(precision=12, scale=2), nullable=True),
+    sa.Column('cost', sa.Numeric(precision=12, scale=2), server_default='0', nullable=False),
     sa.ForeignKeyConstraint(['plantation_id'], ['plantations.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_table('sales',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('sale_date', sa.DateTime(), nullable=False),
+    sa.Column('quantity_sold', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('selling_price', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('cost_of_goods_sold', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('customer_id', sa.Integer(), nullable=False),
+    sa.Column('stage_id', sa.Integer(), nullable=False),
+    sa.Column('status', sa.String(length=20), nullable=False),
+    sa.Column('allocation_mode', sa.String(length=10), nullable=False),
+    sa.Column('created_by_id', sa.Integer(), nullable=False),
+    sa.Column('reviewed_by_id', sa.Integer(), nullable=True),
+    sa.Column('reviewed_at', sa.DateTime(), nullable=True),
+    sa.Column('rejection_reason', sa.String(length=500), nullable=True),
+    sa.Column('invoice_number', sa.String(length=100), nullable=True),
+    sa.Column('notes', sa.String(length=500), nullable=True),
+    sa.Column('is_paid', sa.Boolean(), nullable=False),
+    sa.Column('payment_method', sa.String(length=20), nullable=True),
+    sa.Column('paid_at', sa.DateTime(), nullable=True),
+    sa.Column('paid_by_id', sa.Integer(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['created_by_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['customer_id'], ['customers.id'], ),
+    sa.ForeignKeyConstraint(['paid_by_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['reviewed_by_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['stage_id'], ['batch_stages.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('idx_sale_date', 'sales', ['sale_date'], unique=False)
+    op.create_index(op.f('ix_sales_customer_id'), 'sales', ['customer_id'], unique=False)
+    op.create_index(op.f('ix_sales_sale_date'), 'sales', ['sale_date'], unique=False)
+    op.create_index(op.f('ix_sales_stage_id'), 'sales', ['stage_id'], unique=False)
+    op.create_index(op.f('ix_sales_status'), 'sales', ['status'], unique=False)
     op.create_table('user_roles',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('role_id', sa.Integer(), nullable=False),
@@ -286,24 +324,20 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_expenses_date'), 'expenses', ['date'], unique=False)
-    op.create_table('retail_inventory',
+    op.create_table('sale_allocations',
     sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('sale_id', sa.Integer(), nullable=False),
     sa.Column('batch_id', sa.Integer(), nullable=False),
-    sa.Column('created_date', sa.DateTime(), nullable=False),
-    sa.Column('quantity', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('remaining_quantity', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('cost_per_kg', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('notes', sa.String(length=500), nullable=True),
+    sa.Column('quantity_allocated', sa.Numeric(precision=10, scale=2), nullable=False),
+    sa.Column('cost_allocated', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.CheckConstraint('remaining_quantity <= quantity', name='check_retail_remaining_lte_quantity'),
-    sa.CheckConstraint('remaining_quantity >= 0', name='check_retail_remaining_positive'),
+    sa.CheckConstraint('quantity_allocated > 0', name='check_sale_allocation_positive'),
     sa.ForeignKeyConstraint(['batch_id'], ['batches.id'], ),
+    sa.ForeignKeyConstraint(['sale_id'], ['sales.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('idx_retail_inventory_fifo', 'retail_inventory', ['created_date'], unique=False)
-    op.create_index(op.f('ix_retail_inventory_batch_id'), 'retail_inventory', ['batch_id'], unique=True)
-    op.create_index(op.f('ix_retail_inventory_created_date'), 'retail_inventory', ['created_date'], unique=False)
+    op.create_index(op.f('ix_sale_allocations_batch_id'), 'sale_allocations', ['batch_id'], unique=False)
+    op.create_index(op.f('ix_sale_allocations_sale_id'), 'sale_allocations', ['sale_id'], unique=False)
     op.create_table('transformation_inputs',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('transformation_id', sa.Integer(), nullable=False),
@@ -365,20 +399,6 @@ def upgrade() -> None:
     op.create_index('idx_consumable_purchase_fifo', 'consumable_purchases', ['consumable_id', 'purchase_date'], unique=False)
     op.create_index(op.f('ix_consumable_purchases_consumable_id'), 'consumable_purchases', ['consumable_id'], unique=False)
     op.create_index(op.f('ix_consumable_purchases_purchase_date'), 'consumable_purchases', ['purchase_date'], unique=False)
-    op.create_table('sale_allocations',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('sale_id', sa.Integer(), nullable=False),
-    sa.Column('inventory_id', sa.Integer(), nullable=False),
-    sa.Column('quantity_allocated', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('cost_allocated', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.CheckConstraint('quantity_allocated > 0', name='check_sale_allocation_positive'),
-    sa.ForeignKeyConstraint(['inventory_id'], ['retail_inventory.id'], ),
-    sa.ForeignKeyConstraint(['sale_id'], ['sales.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_sale_allocations_inventory_id'), 'sale_allocations', ['inventory_id'], unique=False)
-    op.create_index(op.f('ix_sale_allocations_sale_id'), 'sale_allocations', ['sale_id'], unique=False)
     op.create_table('transformation_personnel',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('transformation_id', sa.Integer(), nullable=False),
@@ -433,9 +453,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_transformation_personnel_personnel_id'), table_name='transformation_personnel')
     op.drop_index(op.f('ix_transformation_personnel_assignment_date'), table_name='transformation_personnel')
     op.drop_table('transformation_personnel')
-    op.drop_index(op.f('ix_sale_allocations_sale_id'), table_name='sale_allocations')
-    op.drop_index(op.f('ix_sale_allocations_inventory_id'), table_name='sale_allocations')
-    op.drop_table('sale_allocations')
     op.drop_index(op.f('ix_consumable_purchases_purchase_date'), table_name='consumable_purchases')
     op.drop_index(op.f('ix_consumable_purchases_consumable_id'), table_name='consumable_purchases')
     op.drop_index('idx_consumable_purchase_fifo', table_name='consumable_purchases')
@@ -449,10 +466,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_transformation_inputs_transformation_id'), table_name='transformation_inputs')
     op.drop_index(op.f('ix_transformation_inputs_batch_id'), table_name='transformation_inputs')
     op.drop_table('transformation_inputs')
-    op.drop_index(op.f('ix_retail_inventory_created_date'), table_name='retail_inventory')
-    op.drop_index(op.f('ix_retail_inventory_batch_id'), table_name='retail_inventory')
-    op.drop_index('idx_retail_inventory_fifo', table_name='retail_inventory')
-    op.drop_table('retail_inventory')
+    op.drop_index(op.f('ix_sale_allocations_sale_id'), table_name='sale_allocations')
+    op.drop_index(op.f('ix_sale_allocations_batch_id'), table_name='sale_allocations')
+    op.drop_table('sale_allocations')
     op.drop_index(op.f('ix_expenses_date'), table_name='expenses')
     op.drop_table('expenses')
     op.drop_index(op.f('ix_batch_parents_parent_batch_id'), table_name='batch_parents')
@@ -460,6 +476,12 @@ def downgrade() -> None:
     op.drop_table('batch_parents')
     op.drop_table('vehicles')
     op.drop_table('user_roles')
+    op.drop_index(op.f('ix_sales_status'), table_name='sales')
+    op.drop_index(op.f('ix_sales_stage_id'), table_name='sales')
+    op.drop_index(op.f('ix_sales_sale_date'), table_name='sales')
+    op.drop_index(op.f('ix_sales_customer_id'), table_name='sales')
+    op.drop_index('idx_sale_date', table_name='sales')
+    op.drop_table('sales')
     op.drop_table('plantation_leases')
     op.drop_index(op.f('ix_consumable_consumptions_transformation_id'), table_name='consumable_consumptions')
     op.drop_index(op.f('ix_consumable_consumptions_consumption_date'), table_name='consumable_consumptions')
@@ -488,9 +510,6 @@ def downgrade() -> None:
     op.drop_table('consumables')
     op.drop_table('wage_types')
     op.drop_table('transformation_types')
-    op.drop_index(op.f('ix_sales_sale_date'), table_name='sales')
-    op.drop_index('idx_sale_date', table_name='sales')
-    op.drop_table('sales')
     op.drop_index(op.f('ix_roles_name'), table_name='roles')
     op.drop_index(op.f('ix_roles_id'), table_name='roles')
     op.drop_table('roles')
@@ -499,6 +518,9 @@ def downgrade() -> None:
     op.drop_table('locations')
     op.drop_index(op.f('ix_expense_categories_name'), table_name='expense_categories')
     op.drop_table('expense_categories')
+    op.drop_index(op.f('ix_customers_phone'), table_name='customers')
+    op.drop_index(op.f('ix_customers_name'), table_name='customers')
+    op.drop_table('customers')
     op.drop_index(op.f('ix_consumable_categories_name'), table_name='consumable_categories')
     op.drop_table('consumable_categories')
     op.drop_table('batch_stages')

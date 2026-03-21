@@ -406,6 +406,9 @@
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Modal } from "bootstrap";
 import api from "../utils/api";
+import { useReportsStore } from "@/stores/reports";
+
+const reportsStore = useReportsStore();
 
 // ── Reactive State ──────────────────────────────────
 
@@ -574,6 +577,7 @@ async function addPersonnel(data) {
         if (data.photoFile) fd.append("photo", data.photoFile);
 
         const response = await api.post("/personnel/", fd);
+        reportsStore.invalidate('personnel');
         personnel.value.push(response.data);
     } catch (error) {
         console.error("Failed to add personnel:", error);
@@ -592,6 +596,7 @@ async function updatePersonnel(id, data) {
         if (data.photoFile)                   fd.append("photo", data.photoFile);
 
         const response = await api.put(`/personnel/${id}`, fd);
+        reportsStore.invalidate('personnel');
         const idx = personnel.value.findIndex((p) => p.id === id);
         if (idx !== -1) personnel.value[idx] = response.data;
     } catch (error) {
@@ -608,6 +613,7 @@ async function confirmDelete() {
 async function deletePersonnel(id) {
     try {
         await api.delete(`/personnel/${id}`);
+        reportsStore.invalidate('personnel');
         personnel.value = personnel.value.filter((p) => p.id !== id);
     } catch (error) {
         console.error("Failed to delete personnel:", error);

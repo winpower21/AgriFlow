@@ -15,6 +15,7 @@ class TransformationTypeBase(BaseModel):
     name: str
     is_root: Optional[bool] = None
     description: Optional[str] = None
+    measures_personnel_efficiency: bool = True
 
 
 class TransformationTypeCreate(TransformationTypeBase):
@@ -25,6 +26,7 @@ class TransformationTypeUpdate(BaseModel):
     name: Optional[str] = None
     is_root: Optional[bool] = None
     description: Optional[str] = None
+    measures_personnel_efficiency: bool | None = None
 
 
 class TransformationTypeSchema(TransformationTypeBase):

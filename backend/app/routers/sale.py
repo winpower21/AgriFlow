@@ -6,9 +6,13 @@ from sqlalchemy.orm import Session
 
 from ..core.dependencies import get_current_user, roles_required
 from ..crud.sale import SaleService
+from ..crud.user import UserService
 from ..database import get_db
 from ..models.user import User
-from ..schemas.sale import SaleCreate, SaleDetail, SaleListItem, SaleReject
+from ..schemas.sale import (
+    SaleCreate, SaleDetail, SaleListItem, SaleMarkPaid, SaleReject,
+    SalesAnalyticsResponse,
+)
 
 router = APIRouter(
     prefix="/sales",
@@ -31,6 +35,9 @@ def _to_list_item(sale) -> dict:
         "profit_margin": sale.profit_margin,
         "status": sale.status,
         "allocation_mode": sale.allocation_mode,
+        "invoice_number": sale.invoice_number,
+        "is_paid": sale.is_paid,
+        "payment_method": sale.payment_method,
     }
 
 
@@ -61,6 +68,10 @@ def _to_detail(sale) -> dict:
         "stage_name": sale.stage.name if sale.stage else "Unknown",
         "created_by_name": sale.created_by.email if sale.created_by else None,
         "reviewed_by_name": sale.reviewed_by.email if sale.reviewed_by else None,
+        "is_paid": sale.is_paid,
+        "payment_method": sale.payment_method,
+        "paid_at": sale.paid_at,
+        "paid_by_name": sale.paid_by.email if sale.paid_by else None,
         "allocations": [
             {
                 "id": a.id,
@@ -100,6 +111,48 @@ def get_salable_batches(
         }
         for b in batches
     ]
+
+
+@router.get("/analytics", response_model=SalesAnalyticsResponse)
+def get_analytics(
+    date_from: Optional[datetime] = Query(None),
+    date_to: Optional[datetime] = Query(None),
+    stage_id: Optional[int] = Query(None),
+    customer_q: Optional[str] = Query(None),
+    sale_status: Optional[str] = Query(None, alias="status"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Aggregated analytics for the sales dashboard."""
+    is_admin = "admin" in UserService(db).get_user_roles(user_or_id=user)
+    svc = SaleService(db)
+    return svc.get_analytics(
+        date_from=date_from,
+        date_to=date_to,
+        stage_id=stage_id,
+        customer_q=customer_q,
+        status=sale_status,
+        is_admin=is_admin,
+    )
+
+
+@router.put("/{sale_id}/mark-paid", response_model=SaleDetail)
+def mark_sale_paid(
+    sale_id: int,
+    data: SaleMarkPaid,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Mark a completed credit sale as paid. Any authenticated user can do this."""
+    svc = SaleService(db)
+    error = svc.mark_paid(sale_id, data.payment_method, user.id)
+    if error == "not_found":
+        raise HTTPException(status_code=404, detail="Sale not found")
+    if error == "not_completed":
+        raise HTTPException(status_code=422, detail="Only COMPLETED sales can be marked as paid")
+    if error == "already_paid":
+        raise HTTPException(status_code=422, detail="Sale is already marked as paid")
+    return _to_detail(svc.get_by_id(sale_id))
 
 
 @router.get("/", response_model=list[SaleListItem])

@@ -67,6 +67,7 @@ class TransformationType(Base):
     description: Mapped[str] = mapped_column(
         String(1000), nullable=True
     )  # Optional description of what this transformation type involves
+    measures_personnel_efficiency: Mapped[bool] = mapped_column(default=True, server_default="true")
 
     # All transformation events of this type
     transformations: Mapped[List["Transformation"]] = relationship(

@@ -171,8 +171,10 @@ import { useRouter } from 'vue-router'
 import { Modal } from 'bootstrap'
 import api from '../utils/api'
 import { useAuthStore } from '@/stores/auth'
+import { useReportsStore } from '@/stores/reports'
 
 const auth = useAuthStore()
+const reportsStore = useReportsStore()
 const router = useRouter()
 const isAdmin = auth.userRoles?.includes('admin')
 
@@ -275,6 +277,7 @@ async function saveBatch() {
             plantation_id: form.value.plantation_id || null,
         }
         await api.put(`/batches/${editingBatch.value.id}`, payload)
+        reportsStore.invalidate('batches')
         bsModal.hide()
         fetchBatches()
     } catch (err) {
@@ -296,6 +299,7 @@ async function deleteBatch() {
     deleteError.value = ''
     try {
         await api.delete(`/batches/${deletingBatch.value.id}`)
+        reportsStore.invalidate('batches')
         bsDeleteModal.hide()
         fetchBatches()
     } catch (err) {

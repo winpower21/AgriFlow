@@ -1,37 +1,71 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
+import { DEFAULT_STAGE_COLOR, DEFAULT_STAGE_ICON } from '@/utils/colorPalette'
+import { Bar } from 'vue-chartjs'
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
 
 const auth = useAuthStore()
 const router = useRouter()
 
 const summary = ref(null)
-const yieldTrend = ref([])
 const dailyOutput = ref([])
 const recentActivity = ref([])
 const activeTransformations = ref([])
 const loading = ref(true)
 const error = ref(null)
-const outputMode = ref('daily') // 'daily' or 'weekly'
 
 const BASE = 'http://localhost:8000'
 const headers = () => ({ Authorization: `Bearer ${auth.token}` })
+
+const todayStr = new Date().toISOString().slice(0, 10)
+const chartEndDate = ref(todayStr)
+
+const isEndDateToday = computed(() => chartEndDate.value >= todayStr)
+
+const dateRangeLabel = computed(() => {
+    const end = new Date(chartEndDate.value + 'T00:00:00')
+    const start = new Date(end)
+    start.setDate(start.getDate() - 6)
+    const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    return `${fmt(start)} – ${fmt(end)}`
+})
+
+function shiftDate(days) {
+    const d = new Date(chartEndDate.value + 'T00:00:00')
+    d.setDate(d.getDate() + days)
+    const iso = d.toISOString().slice(0, 10)
+    if (iso > todayStr) {
+        chartEndDate.value = todayStr
+    } else {
+        chartEndDate.value = iso
+    }
+}
+
+async function loadDailyOutput() {
+    try {
+        const res = await axios.get(`${BASE}/dashboard/daily-output?end_date=${chartEndDate.value}`, { headers: headers() })
+        dailyOutput.value = res.data
+    } catch (e) {
+        // silently fail for chart reload
+    }
+}
 
 async function loadAll() {
     loading.value = true
     error.value = null
     try {
-        const [sumRes, trendRes, dailyRes, actRes, txRes] = await Promise.all([
+        const [sumRes, dailyRes, actRes, txRes] = await Promise.all([
             axios.get(`${BASE}/dashboard/summary`, { headers: headers() }),
-            axios.get(`${BASE}/dashboard/yield-trend?weeks=8`, { headers: headers() }),
-            axios.get(`${BASE}/dashboard/daily-output?days=7`, { headers: headers() }),
+            axios.get(`${BASE}/dashboard/daily-output?end_date=${chartEndDate.value}`, { headers: headers() }),
             axios.get(`${BASE}/dashboard/recent-activity`, { headers: headers() }),
             axios.get(`${BASE}/transformations/?status=in_progress`, { headers: headers() }),
         ])
         summary.value = sumRes.data
-        yieldTrend.value = trendRes.data
         dailyOutput.value = dailyRes.data
         recentActivity.value = actRes.data
         activeTransformations.value = txRes.data
@@ -44,30 +78,20 @@ async function loadAll() {
 
 onMounted(loadAll)
 
-// Stage config — lookup map for icons/colours; unknown stages get defaults
-const STAGE_CONFIG = {
-    'HARVEST': { cls: 'stage-harvest', icon: 'bi-flower1' },
-    'CLEAN':   { cls: 'stage-clean',   icon: 'bi-droplet' },
-    'DRY':     { cls: 'stage-dry',     icon: 'bi-sun' },
-    'BAG':     { cls: 'stage-bag',     icon: 'bi-bag' },
-    'GRADE':   { cls: 'stage-grade',   icon: 'bi-bar-chart-steps' },
-    'PACK':    { cls: 'stage-pack',    icon: 'bi-box-seam' },
-    'RETAIL':  { cls: 'stage-retail',  icon: 'bi-shop' },
-}
+watch(chartEndDate, () => {
+    loadDailyOutput()
+})
 
 const stageSummaries = computed(() => {
     if (!summary.value?.stages) return []
-    return summary.value.stages.map(s => {
-        const cfg = STAGE_CONFIG[s.stage_name] || { cls: 'stage-default', icon: 'bi-circle' }
-        return {
-            key: s.stage_name,
-            label: s.stage_name.charAt(0) + s.stage_name.slice(1).toLowerCase(),
-            cls: cfg.cls,
-            icon: cfg.icon,
-            count: s.batch_count,
-            total_kg: Number(s.total_remaining_kg ?? 0),
-        }
-    })
+    return summary.value.stages.map(s => ({
+        key: s.stage_name,
+        label: s.stage_name.charAt(0) + s.stage_name.slice(1).toLowerCase(),
+        icon: s.icon || DEFAULT_STAGE_ICON,
+        color: s.color || DEFAULT_STAGE_COLOR,
+        count: s.batch_count,
+        total_kg: Number(s.total_remaining_kg ?? 0),
+    }))
 })
 
 const kpis = computed(() => {
@@ -82,23 +106,103 @@ const kpis = computed(() => {
     }
 })
 
-// Output chart helpers — work for both daily and weekly modes
-const activeOutputData = computed(() =>
-    outputMode.value === 'daily' ? dailyOutput.value : yieldTrend.value
-)
+const hasOutputData = computed(() => dailyOutput.value.some(d => d.total_output_kg > 0))
 
-const maxOutput = computed(() => {
-    if (!activeOutputData.value.length) return 1
-    return Math.max(...activeOutputData.value.map(w => Number(w.total_output_kg ?? 0)), 1)
-})
+const chartData = computed(() => ({
+    labels: dailyOutput.value.map(d => d.date_label),
+    datasets: [{
+        data: dailyOutput.value.map(d => d.total_output_kg),
+        backgroundColor: '#4A6741',
+        borderRadius: 6,
+        barPercentage: 0.7,
+    }]
+}))
 
-function barHeight(kg) {
-    return Math.max(4, Math.round((Number(kg) / maxOutput.value) * 120))
+function externalTooltipHandler(context) {
+    const { chart, tooltip } = context
+    let tooltipEl = chart.canvas.parentNode.querySelector('.chartjs-custom-tooltip')
+
+    if (!tooltipEl) {
+        tooltipEl = document.createElement('div')
+        tooltipEl.classList.add('chartjs-custom-tooltip')
+        chart.canvas.parentNode.appendChild(tooltipEl)
+    }
+
+    if (tooltip.opacity === 0) {
+        tooltipEl.style.opacity = '0'
+        tooltipEl.style.pointerEvents = 'none'
+        return
+    }
+
+    const dataIndex = tooltip.dataPoints?.[0]?.dataIndex
+    if (dataIndex == null) return
+
+    const item = dailyOutput.value[dataIndex]
+    if (!item) return
+
+    let html = `<div class="tooltip-title">${item.date_label}</div>`
+    html += `<div class="tooltip-total">${formatKg(item.total_output_kg)}</div>`
+
+    if (item.stages && item.stages.length > 0) {
+        html += '<div class="tooltip-stages">'
+        for (const s of item.stages) {
+            const color = s.stage_color || '#888'
+            html += `<div class="tooltip-stage-row">
+                <span class="tooltip-swatch" style="background:${color}"></span>
+                <span class="tooltip-stage-name">${s.stage_name}</span>
+                <span class="tooltip-stage-kg">${formatKg(s.output_kg)}</span>
+            </div>`
+        }
+        html += '</div>'
+    }
+
+    tooltipEl.innerHTML = html
+    tooltipEl.style.opacity = '1'
+    tooltipEl.style.pointerEvents = 'auto'
+
+    const isMobile = window.innerWidth < 768
+    if (isMobile) {
+        tooltipEl.style.left = '0'
+        tooltipEl.style.right = '0'
+        tooltipEl.style.bottom = '0'
+        tooltipEl.style.top = 'auto'
+        tooltipEl.style.transform = 'none'
+        tooltipEl.style.width = '100%'
+        tooltipEl.classList.add('mobile')
+    } else {
+        tooltipEl.classList.remove('mobile')
+        tooltipEl.style.width = ''
+        tooltipEl.style.right = ''
+        tooltipEl.style.bottom = ''
+        const left = tooltip.caretX
+        const top = tooltip.caretY
+        tooltipEl.style.left = left + 'px'
+        tooltipEl.style.top = top + 'px'
+        tooltipEl.style.transform = 'translate(-50%, -110%)'
+    }
 }
 
-function outputLabel(item) {
-    return outputMode.value === 'daily' ? item.date_label : item.week_label
-}
+const chartOptions = computed(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        tooltip: {
+            enabled: false,
+            external: externalTooltipHandler,
+        },
+    },
+    scales: {
+        x: {
+            ticks: { maxRotation: 45, autoSkip: false, font: { size: 11 } },
+            grid: { display: false },
+        },
+        y: {
+            beginAtZero: true,
+            ticks: { font: { size: 11 } },
+            grid: { color: 'rgba(0,0,0,0.05)' },
+        }
+    }
+}))
 
 function formatKg(kg) {
     const n = Number(kg)
@@ -179,7 +283,7 @@ function newTransformation() {
                     v-for="stage in stageSummaries"
                     :key="stage.key"
                     class="stage-tile"
-                    :class="stage.cls"
+                    :style="{ borderLeftColor: stage.color, '--stage-color': stage.color }"
                 >
                     <i class="bi" :class="stage.icon + ' stage-icon'"></i>
                     <div class="stage-label">{{ stage.label }}</div>
@@ -191,34 +295,28 @@ function newTransformation() {
             <!-- CHARTS ROW -->
             <div class="charts-row animate-fade-in-up animate-delay-2">
 
-                <!-- OUTPUT TREND (daily / weekly toggle) -->
+                <!-- OUTPUT TREND -->
                 <div class="content-panel chart-panel">
                     <div class="panel-header">
-                        <span class="panel-title">{{ outputMode === 'daily' ? 'Output (Last 7 Days)' : 'Weekly Output (8 Weeks)' }}</span>
-                        <div class="mode-toggle">
-                            <button class="toggle-btn" :class="{ active: outputMode === 'daily' }" @click="outputMode = 'daily'">7 Days</button>
-                            <button class="toggle-btn" :class="{ active: outputMode === 'weekly' }" @click="outputMode = 'weekly'">Weekly</button>
-                        </div>
+                        <span class="panel-title">Output (7 Days)</span>
+                    </div>
+                    <div class="date-picker-row">
+                        <button class="btn-date-nav" @click="shiftDate(-7)" title="Previous 7 days">
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <span class="date-range-label">{{ dateRangeLabel }}</span>
+                        <button class="btn-date-nav" @click="shiftDate(7)" :disabled="isEndDateToday" title="Next 7 days">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                        <input type="date" v-model="chartEndDate" :max="todayStr" class="date-picker-input" />
                     </div>
                     <div class="panel-body">
-                        <div v-if="!activeOutputData.length" class="empty-state small-empty">
+                        <div v-if="!hasOutputData" class="empty-state small-empty">
                             <i class="bi bi-bar-chart"></i>
-                            <p>No data yet</p>
+                            <p>No output data for this period</p>
                         </div>
-                        <div v-else class="bar-chart">
-                            <div
-                                v-for="item in activeOutputData"
-                                :key="outputLabel(item)"
-                                class="bar-col"
-                                :title="`${outputLabel(item)}: ${formatKg(item.total_output_kg)}`"
-                            >
-                                <div class="bar-value">{{ formatKg(item.total_output_kg) }}</div>
-                                <div
-                                    class="bar-fill"
-                                    :style="{ height: barHeight(item.total_output_kg) + 'px' }"
-                                ></div>
-                                <div class="bar-label">{{ outputLabel(item) }}</div>
-                            </div>
+                        <div v-else class="bar-chart-wrapper">
+                            <Bar :data="chartData" :options="chartOptions" />
                         </div>
                     </div>
                 </div>
@@ -239,12 +337,12 @@ function newTransformation() {
                                 :key="stage.key"
                                 class="stage-weight-row"
                             >
-                                <span class="stage-weight-badge" :class="stage.cls">{{ stage.label }}</span>
+                                <span class="stage-weight-badge" :style="{ background: stage.color }">{{ stage.label }}</span>
                                 <div class="stage-weight-bar-wrap">
                                     <div
                                         class="stage-weight-bar"
-                                        :class="stage.cls + '-bar'"
                                         :style="{
+                                            background: stage.color,
                                             width: Math.max(4, Math.round((stage.total_kg / Math.max(...stageSummaries.map(s => s.total_kg), 1)) * 100)) + '%'
                                         }"
                                     ></div>
@@ -370,7 +468,7 @@ function newTransformation() {
     min-height: 100%;
 }
 
-/* ── PAGE HEADER ── */
+/* -- PAGE HEADER -- */
 .page-header {
     display: flex;
     align-items: flex-start;
@@ -407,7 +505,7 @@ function newTransformation() {
 }
 .btn-add:hover { opacity: 0.88; }
 
-/* ── ALERT ── */
+/* -- ALERT -- */
 .alert-banner {
     background: #fff3cd;
     border: 1px solid #ffc107;
@@ -420,7 +518,7 @@ function newTransformation() {
     gap: 0.5rem;
 }
 
-/* ── LOADING ── */
+/* -- LOADING -- */
 .loading-state {
     display: flex;
     align-items: center;
@@ -430,9 +528,9 @@ function newTransformation() {
     color: var(--text-secondary);
 }
 
-/* ══════════════════════════════════════════
+/* ==============================
    STAGE BAR
-══════════════════════════════════════════ */
+============================== */
 .stage-bar {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
@@ -442,30 +540,22 @@ function newTransformation() {
     border-radius: 10px;
     padding: 0.85rem 0.5rem 0.75rem;
     text-align: center;
-    color: #fff;
+    color: var(--text-primary);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.2rem;
+    border-left: 4px solid var(--stage-color, #B0B8C1);
+    background: color-mix(in srgb, var(--stage-color) 8%, var(--bg-card, #fff));
 }
-.stage-icon { font-size: 1.3rem; }
+.stage-tile .stage-icon { font-size: 1.3rem; color: var(--stage-color); }
 .stage-label { font-size: 0.72rem; font-weight: 600; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.04em; }
 .stage-count { font-size: 1.5rem; font-weight: 700; line-height: 1; }
 .stage-kg { font-size: 0.72rem; opacity: 0.85; }
 
-/* ── Stage colours (matches badge system) ── */
-.stage-harvest { background: var(--moss, #4a7c59); }
-.stage-clean   { background: #3b82f6; }
-.stage-dry     { background: var(--harvest, #e07b39); }
-.stage-bag     { background: #7c3aed; }
-.stage-grade   { background: #4338ca; }
-.stage-pack    { background: #0d9488; }
-.stage-retail  { background: #b45309; }
-.stage-default { background: #6b7280; }
-
-/* ══════════════════════════════════════════
+/* ==============================
    CHARTS ROW
-══════════════════════════════════════════ */
+============================== */
 .charts-row {
     display: grid;
     grid-template-columns: 1fr 1fr auto;
@@ -473,7 +563,7 @@ function newTransformation() {
     align-items: start;
 }
 
-/* ── Content panel ── */
+/* -- Content panel -- */
 .content-panel {
     background: var(--surface, #fff);
     border: 1px solid var(--border-light, #e5e7eb);
@@ -514,56 +604,121 @@ function newTransformation() {
 }
 .btn-panel-action:hover { opacity: 0.88; }
 
-/* ── Output mode toggle ── */
-.mode-toggle { display: flex; gap: 2px; background: var(--border-light, #e5e7eb); border-radius: 6px; padding: 2px; }
-.toggle-btn { padding: 3px 10px; border: none; background: transparent; border-radius: 4px; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
-.toggle-btn.active { background: var(--surface, #fff); color: var(--text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
-
-/* ── Bar chart ── */
-.bar-chart {
+/* -- Date picker row -- */
+.date-picker-row {
     display: flex;
-    align-items: flex-end;
-    gap: 0.4rem;
-    height: 160px;
-    padding-bottom: 1.5rem;
-    position: relative;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border-light, #e5e7eb);
+    background: var(--surface, #fff);
 }
-.bar-col {
-    flex: 1;
+.btn-date-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 6px;
+    background: var(--surface, #fff);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: background 0.12s, opacity 0.12s;
+}
+.btn-date-nav:hover:not(:disabled) { background: var(--surface-hover, #f3f4f6); }
+.btn-date-nav:disabled { opacity: 0.4; cursor: not-allowed; }
+.date-range-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    min-width: 120px;
+    text-align: center;
+}
+.date-picker-input {
+    margin-left: auto;
+    border: 1px solid var(--border-light, #e5e7eb);
+    border-radius: 6px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    background: var(--surface, #fff);
+    cursor: pointer;
+}
+.date-picker-input:focus {
+    outline: 2px solid var(--moss);
+    outline-offset: -1px;
+}
+
+/* -- Bar chart wrapper (Chart.js) -- */
+.bar-chart-wrapper {
+    position: relative;
+    height: 200px;
+}
+
+/* -- Custom tooltip (Chart.js external) -- */
+:deep(.chartjs-custom-tooltip) {
+    position: absolute;
+    background: rgba(30, 30, 30, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: #fff;
+    border-radius: 8px;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.78rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 10;
+    min-width: 140px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+:deep(.chartjs-custom-tooltip.mobile) {
+    border-radius: 8px 8px 0 0;
+    position: absolute;
+}
+:deep(.tooltip-title) {
+    font-weight: 700;
+    font-size: 0.82rem;
+    margin-bottom: 0.2rem;
+}
+:deep(.tooltip-total) {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.35rem;
+    color: #a8e6a0;
+}
+:deep(.tooltip-stages) {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
     gap: 0.2rem;
-    height: 100%;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    padding-top: 0.3rem;
 }
-.bar-value {
-    font-size: 0.6rem;
-    color: var(--text-secondary);
-    text-align: center;
-    white-space: nowrap;
+:deep(.tooltip-stage-row) {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
 }
-.bar-fill {
-    width: 100%;
-    background: var(--moss, #4a7c59);
-    border-radius: 4px 4px 0 0;
-    min-height: 4px;
-    transition: height 0.4s ease;
-    opacity: 0.85;
+:deep(.tooltip-swatch) {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
 }
-.bar-col:hover .bar-fill { opacity: 1; }
-.bar-label {
-    font-size: 0.6rem;
-    color: var(--text-secondary);
-    position: absolute;
-    bottom: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
+:deep(.tooltip-stage-name) {
+    flex: 1;
+    font-size: 0.74rem;
+    opacity: 0.9;
+}
+:deep(.tooltip-stage-kg) {
+    font-weight: 600;
+    font-size: 0.74rem;
 }
 
-/* ── Stage weight list ── */
+/* -- Stage weight list -- */
 .stage-weight-list {
     display: flex;
     flex-direction: column;
@@ -595,13 +750,6 @@ function newTransformation() {
     border-radius: 5px;
     transition: width 0.4s ease;
 }
-.stage-harvest-bar { background: var(--moss, #4a7c59); }
-.stage-clean-bar   { background: #3b82f6; }
-.stage-dry-bar     { background: var(--harvest, #e07b39); }
-.stage-bag-bar     { background: #7c3aed; }
-.stage-grade-bar   { background: #4338ca; }
-.stage-pack-bar    { background: #0d9488; }
-.stage-retail-bar  { background: #b45309; }
 .stage-weight-val {
     font-size: 0.78rem;
     font-weight: 600;
@@ -610,7 +758,7 @@ function newTransformation() {
     text-align: right;
 }
 
-/* ── KPI stack ── */
+/* -- KPI stack -- */
 .kpi-stack {
     display: flex;
     flex-direction: column;
@@ -652,9 +800,9 @@ function newTransformation() {
     margin-top: 0.1rem;
 }
 
-/* ══════════════════════════════════════════
+/* ==============================
    BOTTOM ROW
-══════════════════════════════════════════ */
+============================== */
 .bottom-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -662,7 +810,7 @@ function newTransformation() {
     align-items: start;
 }
 
-/* ── Transaction rows ── */
+/* -- Transaction rows -- */
 .tx-row {
     display: flex;
     align-items: center;
@@ -691,7 +839,7 @@ function newTransformation() {
 }
 .active-dot { background: #22c55e; }
 
-/* ── Activity rows ── */
+/* -- Activity rows -- */
 .activity-row {
     display: flex;
     align-items: flex-start;
@@ -715,7 +863,7 @@ function newTransformation() {
     margin-top: 0.15rem;
 }
 
-/* ── Empty state ── */
+/* -- Empty state -- */
 .empty-state {
     text-align: center;
     padding: 2rem 1rem;
@@ -735,9 +883,9 @@ function newTransformation() {
     cursor: pointer;
 }
 
-/* ══════════════════════════════════════════
+/* ==============================
    ANIMATIONS
-══════════════════════════════════════════ */
+============================== */
 @keyframes fade-in-up {
     from { opacity: 0; transform: translateY(12px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -747,9 +895,9 @@ function newTransformation() {
 .animate-delay-2 { animation-delay: 0.16s; }
 .animate-delay-3 { animation-delay: 0.24s; }
 
-/* ══════════════════════════════════════════
+/* ==============================
    RESPONSIVE
-══════════════════════════════════════════ */
+============================== */
 @media (max-width: 1199.98px) {
     .charts-row {
         grid-template-columns: 1fr 1fr;
@@ -790,6 +938,14 @@ function newTransformation() {
         flex: 1 1 calc(50% - 0.3rem);
     }
     .page-title { font-size: 1.3rem; }
+    .date-picker-row {
+        flex-wrap: wrap;
+    }
+    .date-picker-input {
+        margin-left: 0;
+        flex: 1;
+        min-width: 0;
+    }
 }
 
 @media (max-width: 479.98px) {

@@ -13,6 +13,10 @@ class BatchStageSchema(BaseModel):
     id: int
     name: str
     batch_stage_level: int
+    parent_id: int | None = None
+    sort_order: int = 0
+    icon: str | None = None
+    color: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

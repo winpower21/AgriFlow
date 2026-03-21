@@ -9,6 +9,7 @@ from ..models.batch import Batch, BatchStage
 from ..models.transformation import Transformation, TransformationOutput
 from ..schemas.dashboard import (
     DailyOutputItem,
+    DailyStageOutput,
     DashboardSummary,
     RecentActivityItem,
     StageSummaryItem,
@@ -25,14 +26,16 @@ class DashboardService:
             self.db.query(
                 BatchStage.id,
                 BatchStage.name,
+                BatchStage.icon,
+                BatchStage.color,
                 func.count(Batch.id).label("batch_count"),
                 func.coalesce(func.sum(Batch.remaining_weight_kg), 0).label(
                     "total_remaining_kg"
                 ),
             )
             .outerjoin(Batch, Batch.stage_id == BatchStage.id)
-            .group_by(BatchStage.id, BatchStage.name)
-            .order_by(BatchStage.batch_stage_level)
+            .group_by(BatchStage.id, BatchStage.name, BatchStage.icon, BatchStage.color)
+            .order_by(BatchStage.sort_order)
             .all()
         )
 
@@ -40,6 +43,8 @@ class DashboardService:
             StageSummaryItem(
                 stage_id=row.id,
                 stage_name=row.name,
+                icon=row.icon,
+                color=row.color,
                 batch_count=row.batch_count,
                 total_remaining_kg=Decimal(str(row.total_remaining_kg)),
             )
@@ -123,35 +128,66 @@ class DashboardService:
             )
         return results
 
-    def get_daily_output(self, days: int = 7) -> List[DailyOutputItem]:
+    def get_daily_output(self, end_date=None) -> List[DailyOutputItem]:
+        from datetime import date as date_type
+
+        if end_date is None:
+            end_date = date_type.today()
+
         results = []
-        now = datetime.now(timezone.utc)
-        for i in range(days - 1, -1, -1):
-            day_start = (now - timedelta(days=i + 1)).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
-            day_end = (now - timedelta(days=i)).replace(
-                hour=0, minute=0, second=0, microsecond=0
-            )
+        for i in range(6, -1, -1):  # 7 days: end_date-6 ... end_date
+            day = end_date - timedelta(days=i)
+            day_start = datetime(day.year, day.month, day.day, 0, 0, 0, tzinfo=timezone.utc)
+            day_end = datetime(day.year, day.month, day.day, 23, 59, 59, 999999, tzinfo=timezone.utc)
+
+            # Total output for the day
             total = (
                 self.db.query(
                     func.coalesce(func.sum(TransformationOutput.output_weight), 0)
                 )
-                .join(
-                    Transformation,
-                    Transformation.id == TransformationOutput.transformation_id,
-                )
+                .join(Transformation, Transformation.id == TransformationOutput.transformation_id)
                 .filter(
                     Transformation.to_date.isnot(None),
                     Transformation.to_date >= day_start,
-                    Transformation.to_date < day_end,
+                    Transformation.to_date <= day_end,
                 )
                 .scalar()
             )
+
+            # Per-stage breakdown
+            stage_rows = (
+                self.db.query(
+                    BatchStage.name,
+                    BatchStage.color,
+                    func.coalesce(func.sum(TransformationOutput.output_weight), 0).label("output_kg"),
+                )
+                .join(Batch, Batch.id == TransformationOutput.batch_id)
+                .join(BatchStage, BatchStage.id == Batch.stage_id)
+                .join(Transformation, Transformation.id == TransformationOutput.transformation_id)
+                .filter(
+                    Transformation.to_date.isnot(None),
+                    Transformation.to_date >= day_start,
+                    Transformation.to_date <= day_end,
+                )
+                .group_by(BatchStage.name, BatchStage.color)
+                .all()
+            )
+
+            stages = [
+                DailyStageOutput(
+                    stage_name=row.name,
+                    stage_color=row.color,
+                    output_kg=float(Decimal(str(row.output_kg))),
+                )
+                for row in stage_rows
+                if float(Decimal(str(row.output_kg))) > 0
+            ]
+
             results.append(
                 DailyOutputItem(
                     date_label=day_start.strftime("%b %d"),
                     total_output_kg=float(Decimal(str(total))),
+                    stages=stages,
                 )
             )
         return results

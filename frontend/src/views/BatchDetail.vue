@@ -213,6 +213,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Modal } from 'bootstrap'
 import api from '../utils/api'
 import { useAuthStore } from '@/stores/auth'
+import { useReportsStore } from '@/stores/reports'
 
 // Recursive tree node component defined inline
 const BatchTreeNode = {
@@ -241,6 +242,7 @@ const BatchTreeNode = {
 }
 
 const auth = useAuthStore()
+const reportsStore = useReportsStore()
 const route = useRoute()
 const router = useRouter()
 const isAdmin = auth.userRoles?.includes('admin')
@@ -357,6 +359,7 @@ async function saveModal() {
             plantation_id: editForm.value.plantation_id || null,
         }
         const res = await api.put(`/batches/${route.params.id}`, payload)
+        reportsStore.invalidate('batches')
         batch.value = res.data
         bsEditModal.hide()
     } catch (err) {
@@ -375,6 +378,7 @@ async function saveDetails() {
             plantation_id: editForm.value.plantation_id || null,
         }
         const res = await api.put(`/batches/${route.params.id}`, payload)
+        reportsStore.invalidate('batches')
         batch.value = res.data
     } catch (err) {
         saveError.value = err.response?.data?.detail || 'Failed to save.'
@@ -388,6 +392,7 @@ async function deleteBatch() {
     deleteError.value = ''
     try {
         await api.delete(`/batches/${route.params.id}`)
+        reportsStore.invalidate('batches')
         bsDeleteModal.hide()
         router.push({ name: 'batches' })
     } catch (err) {

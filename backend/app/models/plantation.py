@@ -108,9 +108,9 @@ class PlantationLease(Base):
     )  # Lease creation date
     start_date: Mapped[datetime] = mapped_column()  # Lease period start (inclusive)
     end_date: Mapped[datetime | None] = mapped_column(nullable=True)  # Lease period end (inclusive); nullable for open-ended leases
-    cost: Mapped[Decimal | None] = mapped_column(
-        Numeric(12, 2), nullable=True
-    )  # Total lease cost for the period; nullable for pending/unknown
+    cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, server_default="0"
+    )  # Total lease cost for the period
 
     # Back-reference to the parent plantation
     plantation: Mapped["Plantation"] = relationship(

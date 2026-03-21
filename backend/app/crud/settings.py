@@ -30,7 +30,8 @@ keeps the settings/admin API surface consolidated and avoids a
 proliferation of tiny service classes.
 """
 
-from typing import List, Optional
+from collections import defaultdict
+from typing import List, Optional, Union
 
 from sqlalchemy.orm import Session
 
@@ -163,8 +164,8 @@ class SettingsService:
     # PACK -> RETAIL, but stages are configurable via this table.
 
     def get_batch_stages(self) -> List[BatchStage]:
-        """Retrieve all batch stages, ordered by ID."""
-        return self.db.query(BatchStage).order_by(BatchStage.id).all()
+        """Retrieve all batch stages, ordered by sort_order."""
+        return self.db.query(BatchStage).order_by(BatchStage.sort_order).all()
 
     def get_batch_stage(self, stage_id: int) -> Optional[BatchStage]:
         """Retrieve a specific batch stage by primary key."""
@@ -201,6 +202,85 @@ class SettingsService:
         self.db.delete(obj)
         self.db.commit()
         return True
+
+    def reorder_batch_stages(self, items: list) -> Union[str, List[BatchStage]]:
+        """Reorder batch stages and update hierarchy.
+
+        Accepts a list of ``{id, parent_id, sort_order}`` dicts.  Validates
+        that all referenced IDs exist and that no circular parent references
+        are introduced, then bulk-updates ``parent_id``, ``sort_order``, and
+        recomputes ``batch_stage_level`` (tree depth: root = 0).
+
+        Returns the updated list of stages on success, or an error string on
+        validation failure.
+        """
+        # Build lookup of submitted items keyed by stage ID
+        item_map = {item.id: item for item in items}
+        submitted_ids = set(item_map.keys())
+
+        # Validate all IDs exist in the database
+        existing = self.db.query(BatchStage).filter(BatchStage.id.in_(submitted_ids)).all()
+        existing_ids = {s.id for s in existing}
+        missing = submitted_ids - existing_ids
+        if missing:
+            return f"Batch stage IDs not found: {sorted(missing)}"
+
+        # Build adjacency list and check for circular references via DFS
+        children_of: dict[int | None, list[int]] = defaultdict(list)
+        for item in items:
+            children_of[item.parent_id].append(item.id)
+
+        # DFS cycle detection
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color: dict[int, int] = {sid: WHITE for sid in submitted_ids}
+
+        def _dfs(node_id: int) -> str | None:
+            color[node_id] = GRAY
+            for child_id in children_of.get(node_id, []):
+                if color[child_id] == GRAY:
+                    return (
+                        f"Circular reference detected: stage {child_id} "
+                        f"cannot be an ancestor of itself"
+                    )
+                if color[child_id] == WHITE:
+                    err = _dfs(child_id)
+                    if err:
+                        return err
+            color[node_id] = BLACK
+            return None
+
+        for sid in submitted_ids:
+            if color[sid] == WHITE:
+                err = _dfs(sid)
+                if err:
+                    return err
+
+        # Compute tree depth (batch_stage_level) for each node
+        depth: dict[int, int] = {}
+
+        def _compute_depth(node_id: int) -> int:
+            if node_id in depth:
+                return depth[node_id]
+            parent_id = item_map[node_id].parent_id
+            if parent_id is None or parent_id not in item_map:
+                depth[node_id] = 0
+            else:
+                depth[node_id] = _compute_depth(parent_id) + 1
+            return depth[node_id]
+
+        for sid in submitted_ids:
+            _compute_depth(sid)
+
+        # Apply updates
+        stage_by_id = {s.id: s for s in existing}
+        for item in items:
+            stage = stage_by_id[item.id]
+            stage.parent_id = item.parent_id
+            stage.sort_order = item.sort_order
+            stage.batch_stage_level = depth[item.id]
+
+        self.db.commit()
+        return self.get_batch_stages()
 
     # ── Expense Categories ────────────────────────────
     # Classify expenses into buckets (e.g., fertiliser, transport,

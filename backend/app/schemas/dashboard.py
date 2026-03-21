@@ -11,6 +11,8 @@ class StageSummaryItem(BaseModel):
     stage_name: str
     batch_count: int
     total_remaining_kg: float
+    icon: str | None = None
+    color: str | None = None
 
 
 class DashboardSummary(BaseModel):
@@ -33,6 +35,13 @@ class RecentActivityItem(BaseModel):
     entity_type: str  # "batch" or "transformation"
 
 
+class DailyStageOutput(BaseModel):
+    stage_name: str
+    stage_color: Optional[str] = None
+    output_kg: float
+
+
 class DailyOutputItem(BaseModel):
     date_label: str  # e.g. "Mar 14"
     total_output_kg: float
+    stages: List[DailyStageOutput] = []

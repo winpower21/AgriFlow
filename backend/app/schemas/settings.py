@@ -57,9 +57,17 @@ class BatchStageCreate(BaseModel):
     Fields:
         name: Label for the stage (e.g. 'HARVEST', 'CLEAN', 'DRY').
         is_salable: Whether batches at this stage can be sold.
+        parent_id: Optional parent stage for hierarchy.
+        sort_order: Display order among siblings.
+        icon: Optional icon identifier.
+        color: Optional hex color code.
     """
     name: str
     is_salable: bool = False
+    parent_id: int | None = None
+    sort_order: int = 0
+    icon: str | None = None
+    color: str | None = None
 
 
 class BatchStageUpdate(BaseModel):
@@ -69,6 +77,8 @@ class BatchStageUpdate(BaseModel):
     """
     name: Optional[str] = None
     is_salable: Optional[bool] = None
+    icon: str | None = None
+    color: str | None = None
 
 
 class BatchStageSchema(BaseModel):
@@ -78,12 +88,29 @@ class BatchStageSchema(BaseModel):
         id:   Server-generated primary key.
         name: Human-readable label for the processing stage.
         is_salable: Whether batches at this stage can be sold.
+        parent_id: Parent stage ID for hierarchy.
+        sort_order: Display order among siblings.
+        batch_stage_level: Legacy level field (tree depth).
+        icon: Icon identifier for dashboard display.
+        color: Hex color code for dashboard display.
     """
     id: int
     name: str
     is_salable: bool
+    parent_id: int | None = None
+    sort_order: int = 0
+    batch_stage_level: int | None = None
+    icon: str | None = None
+    color: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BatchStageReorderItem(BaseModel):
+    """Schema for reordering batch stages."""
+    id: int
+    parent_id: int | None = None
+    sort_order: int
 
 
 # ── Expense Category ──────────────────────────────────────

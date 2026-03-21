@@ -35,7 +35,7 @@ const navItems = [
     { icon: "bi-box-seam",        label: "Consumables",  route: "consumables" },
     { icon: "bi-receipt",         label: "Expenses",     route: "expenses" },
     { icon: "bi-cart3",           label: "Sales",        route: "sales" },
-    { icon: "bi-graph-up",        label: "Reports",      route: "dashboard" },
+    { icon: "bi-graph-up",        label: "Reports",      route: "reports" },
     { icon: "bi-cloud-sun",       label: "Weather",      route: "weather" },
     { icon: "bi-person-gear",     label: "Users",        route: "manage-users" },
 ];

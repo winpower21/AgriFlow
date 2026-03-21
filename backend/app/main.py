@@ -28,7 +28,7 @@ from sqlalchemy import text
 from .config import settings
 from .database import SessionLocal, engine
 from .models.user import Role
-from .routers import approval, auth, batch, consumable, customer, dashboard, expense, general, personnel, plantation, sale, transformation, users, vehicle, weather_google
+from .routers import approval, auth, batch, consumable, customer, dashboard, expense, general, personnel, plantation, reports, sale, transformation, users, vehicle, weather_google
 from .routers.transformation import types_router
 from .routers.weather_google import location_weather_router
 from .routers.plantation import locations_router
@@ -100,6 +100,27 @@ async def lifespan(app: FastAPI):
             print("Labour expense category already exists.")
     except Exception as e:
         print(f"Error seeding Labour category: {e}")
+
+    # Seed "Lease Cost" expense category (system-protected)
+    try:
+        lease_cost_exists = db.query(ExpenseCategory).filter(
+            ExpenseCategory.name == "Lease Cost"
+        ).first()
+        if not lease_cost_exists:
+            db.add(ExpenseCategory(
+                name="Lease Cost",
+                description="Plantation lease cost payments",
+                is_system=True,
+            ))
+            db.commit()
+            print("Lease Cost expense category seeded.")
+        else:
+            if not lease_cost_exists.is_system:
+                lease_cost_exists.is_system = True
+                db.commit()
+            print("Lease Cost expense category already exists.")
+    except Exception as e:
+        print(f"Error seeding Lease Cost category: {e}")
     yield
 
     # --- Shutdown ---
@@ -157,6 +178,7 @@ app.include_router(types_router)            # /transformation-types — lookup
 app.include_router(sale.router)              # /sales — sales CRUD + approval
 app.include_router(customer.router)          # /customers — customer search + create
 app.include_router(dashboard.router)        # /dashboard — aggregations
+app.include_router(reports.router)          # /reports — analytics for reports page
 app.include_router(general.router)          # /general — shared/utility endpoints
 app.include_router(weather_google.router)       # /api/weather — pass-through to Google API
 app.include_router(location_weather_router)    # /api/weather — location-centric cached weather

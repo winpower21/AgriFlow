@@ -77,6 +77,21 @@ class BatchStage(Base):
     )  # Stage label, e.g. "HARVESTED", "GRADED_A", "RETAIL"
     batch_stage_level: Mapped[int] = mapped_column(Integer, nullable=True)
     is_salable: Mapped[bool] = mapped_column(default=False)
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("batch_stages.id", ondelete="SET NULL"), nullable=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    icon: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+
+    # Self-referential hierarchy
+    parent: Mapped["BatchStage | None"] = relationship(
+        remote_side=[id], back_populates="children"
+    )
+    children: Mapped[list["BatchStage"]] = relationship(
+        back_populates="parent", order_by=sort_order
+    )
+
     batches: Mapped[List["Batch"]] = relationship(
         "Batch", back_populates="stage"
     )  # All batches currently at this stage

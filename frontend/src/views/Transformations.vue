@@ -243,8 +243,10 @@ import { useRouter, useRoute } from 'vue-router'
 import { Modal } from 'bootstrap'
 import api from '../utils/api'
 import { useAuthStore } from '@/stores/auth'
+import { useReportsStore } from '@/stores/reports'
 
 const auth = useAuthStore()
+const reportsStore = useReportsStore()
 const router = useRouter()
 const route = useRoute()
 const isAdmin = auth.userRoles?.includes('admin')
@@ -336,6 +338,7 @@ async function createTransformation() {
             notes: form.value.notes || null,
         }
         const res = await api.post('/transformations/', payload)
+        reportsStore.invalidate('transformations')
         bsCreateModal.hide()
         router.push({ name: 'transformation-detail', params: { id: res.data.id } })
     } catch (err) {
@@ -357,6 +360,7 @@ async function deleteTransformation() {
     deleteError.value = ''
     try {
         await api.delete(`/transformations/${deletingItem.value.id}`)
+        reportsStore.invalidate('transformations')
         bsDeleteModal.hide()
         fetchTransformations()
     } catch (err) {
@@ -399,6 +403,7 @@ async function createType() {
             is_root: newTypeForm.value.is_root,
         })
         types.value.push(res.data)
+        reportsStore.invalidate('transformations')
         newTypeForm.value = { name: '', description: '', is_root: false }
     } catch (err) {
         typeError.value = err.response?.data?.detail || 'Failed to create type.'
@@ -419,6 +424,7 @@ async function saveType(typeId) {
         })
         const idx = types.value.findIndex(t => t.id === typeId)
         if (idx !== -1) types.value[idx] = res.data
+        reportsStore.invalidate('transformations')
         editingType.value = null
     } catch (err) {
         typeError.value = err.response?.data?.detail || 'Failed to save type.'
@@ -431,6 +437,7 @@ async function deleteType(typeId) {
     if (!confirm('Delete this transformation type? This cannot be undone.')) return
     try {
         await api.delete(`/transformation-types/${typeId}`)
+        reportsStore.invalidate('transformations')
         types.value = types.value.filter(t => t.id !== typeId)
         if (editingType.value?.id === typeId) editingType.value = null
     } catch (err) {

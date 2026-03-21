@@ -43,6 +43,7 @@ from ..schemas.settings import (
     AppConfigSchema,
     AppConfigUpdate,
     BatchStageCreate,
+    BatchStageReorderItem,
     BatchStageSchema,
     BatchStageUpdate,
     ExpenseCategoryCreate,
@@ -158,6 +159,16 @@ def create_batch_stage(data: BatchStageCreate, db: Session = Depends(get_db)):
     """Create a new batch stage."""
     service = SettingsService(db)
     return service.create_batch_stage(data)
+
+
+@router.put("/batch-stages/reorder", response_model=list[BatchStageSchema])
+def reorder_batch_stages(items: list[BatchStageReorderItem], db: Session = Depends(get_db)):
+    """Reorder batch stages and update hierarchy."""
+    service = SettingsService(db)
+    result = service.reorder_batch_stages(items)
+    if isinstance(result, str):
+        raise HTTPException(status_code=400, detail=result)
+    return result
 
 
 @router.put("/batch-stages/{stage_id}", response_model=BatchStageSchema)

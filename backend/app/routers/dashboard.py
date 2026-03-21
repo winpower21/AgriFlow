@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -29,5 +31,5 @@ def get_recent_activity(db: Session = Depends(get_db)):
 
 
 @router.get("/daily-output", response_model=list[DailyOutputItem])
-def get_daily_output(days: int = Query(7, ge=1, le=30), db: Session = Depends(get_db)):
-    return DashboardService(db).get_daily_output(days=days)
+def get_daily_output(end_date: date = Query(None), db: Session = Depends(get_db)):
+    return DashboardService(db).get_daily_output(end_date=end_date)

@@ -104,6 +104,12 @@ const routes = [
         component: () => import("@/views/Sales.vue"),
         meta: { layout: "app", requiresAuth: true },
     },
+    {
+        path: "/reports",
+        name: "reports",
+        component: () => import("@/views/ReportsView.vue"),
+        meta: { layout: "app", requiresAuth: true },
+    },
 ];
 
 const router = createRouter({

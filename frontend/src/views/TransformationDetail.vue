@@ -565,8 +565,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { Modal } from 'bootstrap'
 import api from '../utils/api'
 import { useAuthStore } from '@/stores/auth'
+import { useReportsStore } from '@/stores/reports'
 
 const auth = useAuthStore()
+const reportsStore = useReportsStore()
 const route = useRoute()
 const router = useRouter()
 const isAdmin = auth.userRoles?.includes('admin')
@@ -682,6 +684,7 @@ async function markComplete() {
     completeError.value = ''
     try {
         await api.post(`/transformations/${route.params.id}/complete`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         completeError.value = err.response?.data?.detail || 'Failed to mark complete.'
@@ -712,6 +715,7 @@ async function saveEdit() {
             notes: editForm.value.notes || null,
         }
         await api.put(`/transformations/${route.params.id}`, payload)
+        reportsStore.invalidate('transformations')
         bsEdit.hide()
         await refreshTransformation()
     } catch (err) {
@@ -732,6 +736,7 @@ async function deleteTransformation() {
     modalError.value = ''
     try {
         await api.delete(`/transformations/${route.params.id}`)
+        reportsStore.invalidate('transformations')
         bsDelete.hide()
         router.push({ name: 'transformations' })
     } catch (err) {
@@ -765,6 +770,7 @@ async function saveInput() {
             batch_id: inputForm.value.batch_id,
             input_weight: parseFloat(inputForm.value.input_weight),
         })
+        reportsStore.invalidate('transformations')
         bsInput.hide()
         await refreshTransformation()
     } catch (err) {
@@ -778,6 +784,7 @@ async function removeInput(inputId) {
     if (!confirm('Remove this input batch?')) return
     try {
         await api.delete(`/transformations/${route.params.id}/inputs/${inputId}`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to remove.')
@@ -816,6 +823,7 @@ async function saveOutput() {
             payload.plantation_id = outputForm.value.plantation_id || null
         }
         await api.post(`/transformations/${route.params.id}/outputs`, payload)
+        reportsStore.invalidate('transformations')
         bsOutput.hide()
         await refreshTransformation()
     } catch (err) {
@@ -829,6 +837,7 @@ async function removeOutput(outputId) {
     if (!confirm('Remove this output batch? The batch record will also be deleted.')) return
     try {
         await api.delete(`/transformations/${route.params.id}/outputs/${outputId}`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to remove.')
@@ -878,6 +887,7 @@ async function savePersonnel() {
                 personnel_id: personnelForm.value.personnel_id,
             })
         }
+        reportsStore.invalidate('transformations')
         bsPersonnel.hide()
         await refreshTransformation()
     } catch (err) {
@@ -890,6 +900,7 @@ async function savePersonnel() {
 async function markPersonnelPaid(tpId) {
     try {
         await api.post(`/transformations/${route.params.id}/personnel/${tpId}/mark-paid`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to mark as paid.')
@@ -900,6 +911,7 @@ async function markPersonnelUnpaid(tpId) {
     if (!confirm('Mark as unpaid? The linked expense will be deleted.')) return
     try {
         await api.post(`/transformations/${route.params.id}/personnel/${tpId}/mark-unpaid`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to mark as unpaid.')
@@ -910,6 +922,7 @@ async function removePersonnel(tpId) {
     if (!confirm('Remove this personnel assignment?')) return
     try {
         await api.delete(`/transformations/${route.params.id}/personnel/${tpId}`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to remove.')
@@ -955,6 +968,7 @@ async function saveVehicle() {
                 vehicle_id: vehicleForm.value.vehicle_id,
             })
         }
+        reportsStore.invalidate('transformations')
         bsVehicle.hide()
         await refreshTransformation()
     } catch (err) {
@@ -968,6 +982,7 @@ async function removeVehicle(tvId) {
     if (!confirm('Remove this vehicle assignment?')) return
     try {
         await api.delete(`/transformations/${route.params.id}/vehicles/${tvId}`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to remove.')
@@ -996,6 +1011,7 @@ async function saveConsumable() {
             consumption_date: new Date(consumableForm.value.consumption_date).toISOString(),
             notes: consumableForm.value.notes || null,
         })
+        reportsStore.invalidate('transformations')
         bsConsumable.hide()
         await refreshTransformation()
     } catch (err) {
@@ -1009,6 +1025,7 @@ async function removeConsumable(tcId) {
     if (!confirm('Remove this consumable usage? FIFO allocations will be reversed.')) return
     try {
         await api.delete(`/transformations/${route.params.id}/consumables/${tcId}`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to remove.')
@@ -1039,6 +1056,7 @@ async function saveExpense() {
             date: expenseForm.value.date,
             description: expenseForm.value.description || null,
         })
+        reportsStore.invalidate('transformations')
         bsExpense.hide()
         await refreshTransformation()
     } catch (err) {
@@ -1052,6 +1070,7 @@ async function removeExpense(expenseId) {
     if (!confirm('Remove this expense?')) return
     try {
         await api.delete(`/transformations/${route.params.id}/expenses/${expenseId}`)
+        reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to remove.')

@@ -60,6 +60,7 @@
                         <span class="status-chip status-active">
                             <i class="bi bi-circle-fill"></i> Active
                         </span>
+                        <span v-if="leaseExpiryInfo(p)" class="lease-expiry-dot"></span>
                     </div>
                     <div class="card-body">
                         <div v-if="p.location" class="card-location">
@@ -80,6 +81,10 @@
                                 &rarr; {{ formatDate(latestLease(p).end_date) }}
                             </template>
                             <template v-else> &rarr; open-ended</template>
+                        </div>
+                        <div v-if="leaseExpiryInfo(p)" class="lease-expiry-warning" :class="leaseExpiryInfo(p).type">
+                            <i class="bi" :class="leaseExpiryInfo(p).type === 'expired' ? 'bi-x-circle-fill' : 'bi-exclamation-circle-fill'"></i>
+                            {{ leaseExpiryInfo(p).text }}
                         </div>
                     </div>
                     <div class="card-actions" @click.stop>
@@ -149,6 +154,7 @@
                             <i class="bi" :class="p.is_active ? 'bi-circle-fill' : 'bi-circle'"></i>
                             {{ p.is_active ? "Active" : "Inactive" }}
                         </span>
+                        <span v-if="leaseExpiryInfo(p)" class="lease-expiry-dot"></span>
                     </div>
                     <div class="card-body">
                         <div v-if="p.location" class="card-location">
@@ -161,6 +167,10 @@
                         <div v-if="p.area_hectares" class="card-area">
                             <i class="bi bi-bounding-box"></i>
                             {{ formatHa(p.area_hectares) }}
+                        </div>
+                        <div v-if="leaseExpiryInfo(p)" class="lease-expiry-warning" :class="leaseExpiryInfo(p).type">
+                            <i class="bi" :class="leaseExpiryInfo(p).type === 'expired' ? 'bi-x-circle-fill' : 'bi-exclamation-circle-fill'"></i>
+                            {{ leaseExpiryInfo(p).text }}
                         </div>
                     </div>
                     <div class="card-actions" @click.stop>
@@ -338,9 +348,77 @@
                                                 <span class="lease-arrow">&#8594;</span>
                                                 {{ lease.end_date ? formatDate(lease.end_date) : "open-ended" }}
                                             </div>
-                                            <span v-if="lease.cost" class="lease-cost-badge">
-                                                {{ formatCurrency(lease.cost) }}
-                                            </span>
+                                            <div class="lease-row-actions">
+                                                <span v-if="lease.cost" class="lease-cost-badge">
+                                                    {{ formatCurrency(lease.cost) }}
+                                                </span>
+                                                <button
+                                                    v-if="lease.cost > 0"
+                                                    class="btn-sm-action"
+                                                    @click.stop="openLeasePaymentForm(lease)"
+                                                    title="Record lease payment"
+                                                >
+                                                    <i class="bi bi-receipt"></i> Record Payment
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Lease Payment Inline Form -->
+                                        <div v-if="leasePaymentLease" class="lease-payment-form">
+                                            <h6 class="lease-payment-title">
+                                                <i class="bi bi-receipt"></i>
+                                                Record Lease Payment
+                                            </h6>
+                                            <div class="row g-2 mb-2">
+                                                <div class="col-6">
+                                                    <label class="form-label">Amount (&#8377;) *</label>
+                                                    <input
+                                                        v-model="leasePaymentForm.amount"
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        class="form-control form-control-sm"
+                                                    />
+                                                </div>
+                                                <div class="col-6">
+                                                    <label class="form-label">Date *</label>
+                                                    <input
+                                                        v-model="leasePaymentForm.date"
+                                                        type="date"
+                                                        class="form-control form-control-sm"
+                                                    />
+                                                </div>
+                                                <div class="col-12">
+                                                    <label class="form-label">Description</label>
+                                                    <input
+                                                        v-model="leasePaymentForm.description"
+                                                        type="text"
+                                                        class="form-control form-control-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div class="d-flex gap-2">
+                                                <button
+                                                    class="btn-sm-primary"
+                                                    :disabled="!leasePaymentForm.amount || !leasePaymentForm.date || leasePaymentSaving"
+                                                    @click="submitLeasePayment"
+                                                >
+                                                    <i class="bi bi-check-lg"></i>
+                                                    Save Payment
+                                                </button>
+                                                <button
+                                                    class="btn-sm-cancel"
+                                                    @click="cancelLeasePayment"
+                                                >
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Lease Expense Summary -->
+                                        <div v-if="leaseExpenseSummary.total > 0" class="lease-expense-summary">
+                                            <i class="bi bi-wallet2"></i>
+                                            Lease expenses: {{ formatCurrency(leaseExpenseSummary.recorded) }} recorded / {{ formatCurrency(leaseExpenseSummary.total) }} total
                                         </div>
                                     </div>
                                     <div v-else class="lease-empty">
@@ -630,8 +708,10 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Modal } from "bootstrap";
 import { useAuthStore } from "../stores/auth";
 import api from "../utils/api";
+import { useReportsStore } from "@/stores/reports";
 
 const auth = useAuthStore();
+const reportsStore = useReportsStore();
 const isAdmin = computed(() => auth.userRoles?.includes("admin"));
 
 // ── Data ─────────────────────────────────────────────────────────────────────
@@ -668,6 +748,19 @@ function formatHa(ha) {
 
 function latestLease(p) {
     return p.lease?.[0] ?? null;
+}
+
+function leaseExpiryInfo(plantation) {
+    const lease = latestLease(plantation)
+    if (!lease || !lease.end_date) return null
+    const endDate = new Date(lease.end_date)
+    endDate.setHours(0, 0, 0, 0)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const diffDays = Math.ceil((endDate - today) / (1000 * 60 * 60 * 24))
+    if (diffDays < 0) return { type: 'expired', text: 'Lease expired', days: diffDays }
+    if (diffDays <= 30) return { type: 'expiring', text: `Lease expires in ${diffDays} day${diffDays !== 1 ? 's' : ''}`, days: diffDays }
+    return null
 }
 
 function formatDate(d) {
@@ -724,8 +817,11 @@ async function openDetailsModal(p) {
     weatherError.value = null;
     showAddLease.value = false;
     leaseForm.value = { start_date: "", end_date: "", cost: "" };
+    leasePaymentLease.value = null;
+    leaseExpenseSummary.value = { recorded: 0, total: 0 };
     if (!bsDetailModal) bsDetailModal = new Modal(detailModalRef.value);
     bsDetailModal.show();
+    fetchLeaseExpenseSummary();
     if (p.location_id) await loadWeather(p.id, false);
 }
 
@@ -755,6 +851,7 @@ async function submitAddLease() {
             cost: leaseForm.value.cost ? parseFloat(leaseForm.value.cost) : null,
         };
         await api.post(`/plantations/${selectedPlantation.value.id}/leases`, payload);
+        reportsStore.invalidate('plantations');
         // Refresh plantation list so lease history updates
         await fetchAll();
         selectedPlantation.value = plantations.value.find(
@@ -766,6 +863,78 @@ async function submitAddLease() {
         console.error("Failed to add lease:", e);
     } finally {
         leaseSaving.value = false;
+    }
+}
+
+// ── Lease Payment ────────────────────────────────────────────────────────────
+const leaseCostCategoryId = ref(null);
+const leasePaymentLease = ref(null);
+const leasePaymentForm = ref({ amount: '', date: '', description: '' });
+const leasePaymentSaving = ref(false);
+const leaseExpenseSummary = ref({ recorded: 0, total: 0 });
+
+async function fetchLeaseCostCategory() {
+    try {
+        const res = await api.get('/settings/expense-categories');
+        const cat = res.data.find((c) => c.name === 'Lease Cost');
+        if (cat) leaseCostCategoryId.value = cat.id;
+    } catch (e) {
+        console.error('Failed to fetch expense categories:', e);
+    }
+}
+
+function openLeasePaymentForm(lease) {
+    leasePaymentLease.value = lease;
+    const today = new Date().toISOString().slice(0, 10);
+    const pName = selectedPlantation.value?.name || '';
+    const startStr = formatDate(lease.start_date);
+    const endStr = lease.end_date ? formatDate(lease.end_date) : 'open-ended';
+    leasePaymentForm.value = {
+        amount: lease.cost || '',
+        date: today,
+        description: `Lease payment for ${pName} (${startStr} – ${endStr})`,
+    };
+}
+
+function cancelLeasePayment() {
+    leasePaymentLease.value = null;
+    leasePaymentForm.value = { amount: '', date: '', description: '' };
+}
+
+async function submitLeasePayment() {
+    if (!leasePaymentForm.value.amount || !leasePaymentForm.value.date || !leaseCostCategoryId.value) return;
+    leasePaymentSaving.value = true;
+    try {
+        await api.post('/expenses/', {
+            amount: parseFloat(leasePaymentForm.value.amount),
+            category_id: leaseCostCategoryId.value,
+            plantation_id: selectedPlantation.value.id,
+            date: leasePaymentForm.value.date,
+            description: leasePaymentForm.value.description,
+        });
+        reportsStore.invalidate('expenses');
+        reportsStore.invalidate('plantations');
+        cancelLeasePayment();
+        await fetchLeaseExpenseSummary();
+    } catch (e) {
+        console.error('Failed to record lease payment:', e);
+    } finally {
+        leasePaymentSaving.value = false;
+    }
+}
+
+async function fetchLeaseExpenseSummary() {
+    if (!selectedPlantation.value || !leaseCostCategoryId.value) return;
+    try {
+        const res = await api.get(`/expenses/?plantation_id=${selectedPlantation.value.id}&category_id=${leaseCostCategoryId.value}`);
+        const expenses = res.data;
+        const recorded = expenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+        const totalLeaseCost = (selectedPlantation.value.lease || []).reduce(
+            (sum, l) => sum + parseFloat(l.cost || 0), 0
+        );
+        leaseExpenseSummary.value = { recorded, total: totalLeaseCost };
+    } catch (e) {
+        leaseExpenseSummary.value = { recorded: 0, total: 0 };
     }
 }
 
@@ -903,6 +1072,7 @@ async function submitForm() {
         } else {
             await api.post("/plantations/", payload);
         }
+        reportsStore.invalidate('plantations');
         await fetchAll();
         bsFormModal?.hide();
     } catch (e) {
@@ -925,6 +1095,7 @@ async function confirmDelete() {
     if (!deleteTarget.value) return;
     try {
         await api.delete(`/plantations/${deleteTarget.value.id}?force=true`);
+        reportsStore.invalidate('plantations');
         plantations.value = plantations.value.filter(
             (p) => p.id !== deleteTarget.value.id
         );
@@ -935,7 +1106,10 @@ async function confirmDelete() {
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
-onMounted(fetchAll);
+onMounted(() => {
+    fetchAll();
+    fetchLeaseCostCategory();
+});
 
 onBeforeUnmount(() => {
     bsDetailModal?.dispose();
@@ -1070,6 +1244,7 @@ onBeforeUnmount(() => {
 
 /* ── Plantation Card ────────────────────────────── */
 .plantation-card {
+    position: relative;
     background: var(--bg-card);
     border: 1px solid var(--border-light);
     border-radius: 14px;
@@ -1893,6 +2068,75 @@ onBeforeUnmount(() => {
 
 .btn-modal-danger:hover {
     background: var(--sienna-light);
+}
+
+/* ── Lease Expiry Warnings ─────────────────────── */
+.lease-expiry-dot {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #dc3545;
+    box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.2);
+}
+
+.lease-expiry-warning {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 4px 0;
+}
+
+.lease-expiry-warning.expiring {
+    color: #e67e22;
+}
+
+.lease-expiry-warning.expired {
+    color: #dc3545;
+}
+
+/* ── Lease Row Actions ─────────────────────────── */
+.lease-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ── Lease Payment Form ────────────────────────── */
+.lease-payment-form {
+    background: var(--parchment-deep);
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 4px;
+}
+
+.lease-payment-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ── Lease Expense Summary ─────────────────────── */
+.lease-expense-summary {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 8px 12px;
+    background: rgba(74, 103, 65, 0.06);
+    border-radius: 8px;
+    margin-top: 4px;
 }
 
 /* ── Responsive ─────────────────────────────────── */

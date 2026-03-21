@@ -1045,6 +1045,9 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Modal } from "bootstrap";
 import api from "../utils/api";
 import { useAuthStore } from "../stores/auth";
+import { useReportsStore } from "@/stores/reports";
+
+const reportsStore = useReportsStore();
 
 // ── v-click-outside for filter popover ───────────────
 
@@ -1338,6 +1341,7 @@ async function saveExpense() {
             const res = await api.post("/expenses/", payload);
             expenses.value.unshift(res.data);
         }
+        reportsStore.invalidate('expenses');
         bsExpenseModal.hide();
     } catch (err) {
         expenseFormError.value =
@@ -1360,6 +1364,7 @@ async function deleteExpense() {
     if (!deletingExpense.value) return;
     try {
         await api.delete(`/expenses/${deletingExpense.value.id}`);
+        reportsStore.invalidate('expenses');
         expenses.value = expenses.value.filter(
             (e) => e.id !== deletingExpense.value.id,
         );
@@ -1449,6 +1454,7 @@ async function approveItem(requestId, index) {
         await api.patch(`/approvals/${requestId}/items/${index}`, {
             action: "approve",
         });
+        reportsStore.invalidate('expenses');
         await fetchApprovals();
         await fetchExpenses();
     } catch (err) {
@@ -1491,6 +1497,7 @@ async function submitApproveWithEdits(requestId, index) {
             },
         });
         editingApprovalItem.value = null;
+        reportsStore.invalidate('expenses');
         await fetchApprovals();
         await fetchExpenses();
     } catch (err) {
@@ -1513,6 +1520,7 @@ async function confirmReject() {
             action: "reject",
             rejection_note: rejectNote.value.trim() || null,
         });
+        reportsStore.invalidate('expenses');
         bsRejectModal.hide();
         await fetchApprovals();
     } catch (err) {
@@ -1523,6 +1531,7 @@ async function confirmReject() {
 async function approveAll(requestId) {
     try {
         await api.post(`/approvals/${requestId}/approve-all`);
+        reportsStore.invalidate('expenses');
         await fetchApprovals();
         await fetchExpenses();
     } catch (err) {

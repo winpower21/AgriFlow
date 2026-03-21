@@ -3,14 +3,16 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { Modal } from 'bootstrap'
 import api from '../utils/api'
 import { useAuthStore } from '@/stores/auth'
-
+import { useReportsStore } from '@/stores/reports'
 const auth = useAuthStore()
+const reportsStore = useReportsStore()
 const isAdmin = auth.userRoles?.includes('admin')
 
 // --- List state ---
 const sales = ref([])
 const loading = ref(true)
 const salableStages = ref([])
+const activeTab = ref('entries')
 
 // --- Filter sidebar ---
 const filterOpen = ref(false)
@@ -35,6 +37,8 @@ const form = ref({
   allocation_mode: 'FIFO',
   manual_allocations: [],
   notes: '',
+  is_paid: false,
+  payment_method: null,
 })
 
 // --- Customer search ---
@@ -70,6 +74,9 @@ const approving = ref(false)
 const rejecting = ref(false)
 const deleting = ref(false)
 const showDeleteConfirm = ref(false)
+const showMarkPaid = ref(false)
+const markPaidMethod = ref(null)
+const markingPaid = ref(false)
 
 // --- Computed ---
 const totalAmount = computed(() => {
@@ -347,9 +354,21 @@ function toggleBatchSelection(batchId) {
 }
 
 // --- Filter sidebar ---
+function buildFilterParams() {
+  const params = {}
+  if (filterStatus.value) params.status = filterStatus.value
+  if (filterStageId.value) params.stage_id = filterStageId.value
+  if (filterDateFrom.value) params.date_from = filterDateFrom.value + 'T00:00:00'
+  if (filterDateTo.value) params.date_to = filterDateTo.value + 'T23:59:59'
+  if (filterCustomerQ.value) params.customer_q = filterCustomerQ.value
+  return params
+}
+
 function applyFilters() {
   filterOpen.value = false
-  fetchSales()
+  if (activeTab.value === 'entries') {
+    fetchSales()
+  }
 }
 
 function clearFilters() {
@@ -359,7 +378,9 @@ function clearFilters() {
   filterDateFrom.value = ''
   filterDateTo.value = ''
   filterCustomerQ.value = ''
-  fetchSales()
+  if (activeTab.value === 'entries') {
+    fetchSales()
+  }
 }
 
 // --- Create sale ---
@@ -373,6 +394,8 @@ function openCreateModal() {
     allocation_mode: 'FIFO',
     manual_allocations: [],
     notes: '',
+    is_paid: false,
+    payment_method: null,
   }
   selectedCustomer.value = null
   customerQuery.value = ''
@@ -413,6 +436,8 @@ async function submitSale() {
       selling_price: totalAmount.value,
       allocation_mode: form.value.allocation_mode,
       notes: form.value.notes || null,
+      is_paid: form.value.is_paid,
+      payment_method: form.value.is_paid ? form.value.payment_method : null,
     }
     if (form.value.allocation_mode === 'MANUAL') {
       payload.manual_allocations = selectedBatchIds.value.map(bid => ({ batch_id: bid }))
@@ -421,6 +446,7 @@ async function submitSale() {
     const endpoint = isAdmin ? '/sales/' : '/sales/request'
     await api.post(endpoint, payload)
     createModal.hide()
+    reportsStore.invalidate('sales')
     fetchSales()
   } catch (e) {
     formError.value = e.response?.data?.detail || 'Failed to create sale'
@@ -435,6 +461,8 @@ async function openDetail(saleId) {
   showRejectInput.value = false
   showDeleteConfirm.value = false
   rejectReason.value = ''
+  showMarkPaid.value = false
+  markPaidMethod.value = null
   detailModal.show()
   try {
     const { data } = await api.get(`/sales/${saleId}`)
@@ -452,6 +480,7 @@ async function approveSale() {
   try {
     await api.put(`/sales/${detailSale.value.id}/approve`)
     detailModal.hide()
+    reportsStore.invalidate('sales')
     fetchSales()
   } catch (e) {
     console.error('Failed to approve', e)
@@ -466,6 +495,7 @@ async function rejectSale() {
   try {
     await api.put(`/sales/${detailSale.value.id}/reject`, { rejection_reason: rejectReason.value || null })
     detailModal.hide()
+    reportsStore.invalidate('sales')
     fetchSales()
   } catch (e) {
     console.error('Failed to reject', e)
@@ -480,12 +510,36 @@ async function deleteSale() {
   try {
     await api.delete(`/sales/${detailSale.value.id}`)
     detailModal.hide()
+    reportsStore.invalidate('sales')
     fetchSales()
   } catch (e) {
     console.error('Failed to delete', e)
   } finally {
     deleting.value = false
     showDeleteConfirm.value = false
+  }
+}
+
+async function markSaleAsPaid() {
+  if (!detailSale.value || !markPaidMethod.value) return
+  markingPaid.value = true
+  try {
+    const { data } = await api.put(`/sales/${detailSale.value.id}/mark-paid`, {
+      payment_method: markPaidMethod.value
+    })
+    detailSale.value = data
+    const idx = sales.value.findIndex(s => s.id === detailSale.value.id)
+    if (idx >= 0) {
+      sales.value[idx].is_paid = true
+      sales.value[idx].payment_method = markPaidMethod.value
+    }
+    showMarkPaid.value = false
+    markPaidMethod.value = null
+    reportsStore.invalidate('sales')
+  } catch (e) {
+    console.error('Failed to mark as paid', e)
+  } finally {
+    markingPaid.value = false
   }
 }
 
@@ -507,6 +561,19 @@ function statusClass(s) {
     'REJECTED': 'status-rejected',
   }[s] || ''
 }
+function paymentLabel(s) {
+  if (s.status !== 'COMPLETED') return null
+  return s.is_paid ? 'Paid' : 'Credit'
+}
+function paymentClass(s) {
+  if (s.status !== 'COMPLETED') return 'payment-na'
+  return s.is_paid ? 'payment-paid' : 'payment-credit'
+}
+function formatPaymentMethod(m) {
+  if (!m) return ''
+  const map = { CASH: 'Cash', BANK_TRANSFER: 'Bank Transfer', UPI: 'UPI' }
+  return map[m] || m
+}
 
 watch(() => form.value.stage_id, fetchSalableBatches)
 </script>
@@ -519,58 +586,82 @@ watch(() => form.value.stage_id, fetchSalableBatches)
         <h1 class="page-title">Sales</h1>
         <p class="page-subtitle">Track and manage product sales</p>
       </div>
-      <div class="header-actions">
+    </div>
+
+    <div class="tabs-bar">
+      <div class="tabs">
+        <button :class="['tab-btn', { active: activeTab === 'entries' }]" @click="activeTab = 'entries'">
+          <i class="bi bi-list-ul"></i> Sales Entries
+        </button>
+      </div>
+      <div class="tab-actions">
         <button class="btn-filter" @click="filterOpen = !filterOpen">
           <i class="bi bi-funnel"></i>
           <span>Filters</span>
           <span v-if="activeFilterCount" class="filter-count">{{ activeFilterCount }}</span>
         </button>
-        <button class="btn-primary-action" @click="openCreateModal">
+        <button v-if="activeTab === 'entries'" class="btn-primary-action" @click="openCreateModal">
           <i class="bi bi-plus-lg"></i>
           {{ isAdmin ? 'New Sale' : 'Request Sale' }}
         </button>
       </div>
     </div>
 
-    <!-- Table -->
-    <div v-if="loading" class="content-panel">
-      <div class="empty-state"><i class="bi bi-hourglass-split"></i><p>Loading...</p></div>
-    </div>
-    <div v-else-if="sales.length === 0" class="content-panel">
-      <div class="empty-state"><i class="bi bi-cart-x"></i><p>No sales found</p></div>
-    </div>
-    <div v-else class="table-wrapper">
-      <table class="sales-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Customer</th>
-            <th>Stage</th>
-            <th class="text-end">Qty (kg)</th>
-            <th class="text-end">Rate/kg</th>
-            <th class="text-end">Total</th>
-            <th v-if="isAdmin" class="text-end">COGS</th>
-            <th v-if="isAdmin" class="text-end">Profit</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="s in sales" :key="s.id" @click="openDetail(s.id)" class="clickable-row">
-            <td>{{ formatDate(s.sale_date) }}</td>
-            <td class="customer-cell">
-              <span>{{ s.customer_name }}</span>
-              <span class="customer-phone">Ph. No.: {{ s.customer_phone }}</span>
-            </td>
-            <td><span class="stage-badge">{{ s.stage_name }}</span></td>
-            <td class="text-end">{{ formatKg(s.quantity_sold) }}</td>
-            <td class="text-end">{{ formatCurrency(s.selling_price / s.quantity_sold) }}</td>
-            <td class="text-end fw-semibold">{{ formatCurrency(s.selling_price) }}</td>
-            <td v-if="isAdmin" class="text-end text-muted">{{ formatCurrency(s.cost_of_goods_sold) }}</td>
-            <td v-if="isAdmin" class="text-end text-profit">{{ formatCurrency(s.profit) }}</td>
-            <td><span :class="['status-badge', statusClass(s.status)]">{{ s.status }}</span></td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Sales Entries Tab -->
+    <div v-if="activeTab === 'entries'" class="tab-content">
+      <div v-if="loading" class="content-panel">
+        <div class="empty-state"><i class="bi bi-hourglass-split"></i><p>Loading...</p></div>
+      </div>
+      <div v-else-if="sales.length === 0" class="content-panel">
+        <div class="empty-state"><i class="bi bi-cart-x"></i><p>No sales found</p></div>
+      </div>
+      <template v-else>
+        <div class="table-wrapper desktop-only">
+          <table class="sales-table">
+            <thead>
+              <tr>
+                <th>Invoice ID</th>
+                <th>Customer</th>
+                <th>Date</th>
+                <th class="text-end">Total</th>
+                <th>Status</th>
+                <th>Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in sales" :key="s.id" @click="openDetail(s.id)" class="clickable-row">
+                <td class="invoice-cell">{{ s.invoice_number || '—' }}</td>
+                <td>{{ s.customer_name }}</td>
+                <td>{{ formatDate(s.sale_date) }}</td>
+                <td class="text-end fw-semibold">{{ formatCurrency(s.selling_price) }}</td>
+                <td><span :class="['status-badge', statusClass(s.status)]">{{ s.status }}</span></td>
+                <td>
+                  <span v-if="paymentLabel(s)" :class="['payment-badge', paymentClass(s)]">{{ paymentLabel(s) }}</span>
+                  <span v-else class="payment-badge payment-na">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="cards-wrapper mobile-only">
+          <div v-for="s in sales" :key="s.id" class="sale-card" @click="openDetail(s.id)">
+            <div class="sale-card-top">
+              <span class="invoice-cell">{{ s.invoice_number || '—' }}</span>
+              <span :class="['status-badge', statusClass(s.status)]">{{ s.status }}</span>
+            </div>
+            <div class="sale-card-customer">{{ s.customer_name }}</div>
+            <div class="sale-card-bottom">
+              <span class="sale-card-date">{{ formatDate(s.sale_date) }}</span>
+              <span class="sale-card-amount">{{ formatCurrency(s.selling_price) }}</span>
+            </div>
+            <div class="sale-card-payment">
+              <span v-if="paymentLabel(s)" :class="['payment-badge', paymentClass(s)]">{{ paymentLabel(s) }}</span>
+              <span v-else class="payment-badge payment-na">—</span>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- Filter Sidebar Overlay -->
@@ -582,11 +673,6 @@ watch(() => form.value.stage_id, fetchSalableBatches)
         <div class="filter-sidebar-header">
           <h5>Filters</h5>
           <button class="btn-close-filter" @click="filterOpen = false"><i class="bi bi-x-lg"></i></button>
-        </div>
-
-        <div class="filter-sidebar-count">
-          <i class="bi bi-list-ul"></i>
-          <span>{{ sales.length }} record{{ sales.length !== 1 ? 's' : '' }} found</span>
         </div>
 
         <div class="filter-sidebar-body">
@@ -759,6 +845,24 @@ watch(() => form.value.stage_id, fetchSalableBatches)
                 </div>
               </div>
 
+              <!-- Payment Type -->
+              <div class="form-group">
+                <label class="form-label">Payment Type</label>
+                <div class="toggle-group">
+                  <button type="button" :class="['toggle-btn', { active: !form.is_paid }]" @click="form.is_paid = false">Credit</button>
+                  <button type="button" :class="['toggle-btn', { active: form.is_paid }]" @click="form.is_paid = true">Paid</button>
+                </div>
+              </div>
+              <div v-if="form.is_paid" class="form-group">
+                <label class="form-label">Payment Method *</label>
+                <select v-model="form.payment_method" class="form-select">
+                  <option :value="null" disabled>Select method...</option>
+                  <option value="CASH">Cash</option>
+                  <option value="BANK_TRANSFER">Bank Transfer</option>
+                  <option value="UPI">UPI</option>
+                </select>
+              </div>
+
               <!-- Notes (at the bottom) -->
               <div class="form-group">
                 <label class="form-label">Notes</label>
@@ -886,6 +990,43 @@ watch(() => form.value.stage_id, fetchSalableBatches)
               <div v-if="detailSale.rejection_reason" class="detail-section">
                 <h6>Rejection Reason</h6>
                 <p class="text-danger">{{ detailSale.rejection_reason }}</p>
+              </div>
+
+              <!-- Payment Section -->
+              <div class="detail-section" v-if="detailSale.status === 'COMPLETED'">
+                <h6>Payment</h6>
+                <div class="detail-grid">
+                  <div>
+                    <span class="detail-label">Status</span>
+                    <span :class="['payment-badge', detailSale.is_paid ? 'payment-paid' : 'payment-credit']">
+                      {{ detailSale.is_paid ? 'Paid' : 'Credit' }}
+                    </span>
+                  </div>
+                  <template v-if="detailSale.is_paid">
+                    <div><span class="detail-label">Method</span><span>{{ formatPaymentMethod(detailSale.payment_method) }}</span></div>
+                    <div><span class="detail-label">Paid On</span><span>{{ formatDate(detailSale.paid_at) }}</span></div>
+                    <div><span class="detail-label">Paid By</span><span>{{ detailSale.paid_by_name || '—' }}</span></div>
+                  </template>
+                </div>
+                <div v-if="!detailSale.is_paid" class="mark-paid-section">
+                  <div v-if="!showMarkPaid">
+                    <button class="btn-modal btn-modal-confirm" @click="showMarkPaid = true">
+                      <i class="bi bi-check-circle"></i> Mark as Paid
+                    </button>
+                  </div>
+                  <div v-else class="mark-paid-form">
+                    <select v-model="markPaidMethod" class="form-select">
+                      <option :value="null" disabled>Payment method...</option>
+                      <option value="CASH">Cash</option>
+                      <option value="BANK_TRANSFER">Bank Transfer</option>
+                      <option value="UPI">UPI</option>
+                    </select>
+                    <button class="btn-modal btn-modal-confirm" :disabled="markingPaid || !markPaidMethod" @click="markSaleAsPaid">
+                      <i v-if="markingPaid" class="bi bi-hourglass-split"></i> Confirm
+                    </button>
+                    <button class="btn-modal btn-modal-cancel" @click="showMarkPaid = false; markPaidMethod = null">Cancel</button>
+                  </div>
+                </div>
               </div>
 
               <div v-if="isAdmin && detailSale.status === 'PENDING'" class="admin-actions">
@@ -1067,17 +1208,6 @@ watch(() => form.value.stage_id, fetchSalableBatches)
 
 .btn-close-filter:hover {
     color: var(--text-primary);
-}
-
-.filter-sidebar-count {
-    padding: 10px 20px;
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--parchment-deep);
-    border-bottom: 1px solid var(--border-light);
 }
 
 .filter-sidebar-body {
@@ -1586,6 +1716,156 @@ watch(() => form.value.stage_id, fetchSalableBatches)
     font-weight: 500;
 }
 
+/* ── Tabs ──────────────────────────────────── */
+.tabs-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--parchment-deep);
+    padding: 4px;
+    border-radius: 10px;
+}
+
+.tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.tab-btn.active {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+
+.tab-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* ── Mobile Cards ──────────────────────────── */
+.desktop-only { display: block; }
+.mobile-only { display: none; }
+
+.sale-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    box-shadow: var(--shadow-sm);
+}
+
+.sale-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.sale-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.sale-card-customer {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.sale-card-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sale-card-date {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.sale-card-amount {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.sale-card-payment {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+/* ── Invoice & Payment Badges ─────────────── */
+.invoice-cell {
+    font-family: 'DM Sans', monospace;
+    font-size: 0.82rem;
+    color: var(--moss);
+    font-weight: 500;
+}
+
+.payment-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.payment-paid {
+    background: rgba(74, 103, 65, 0.1);
+    color: var(--moss);
+}
+
+.payment-credit {
+    background: var(--sienna-faded);
+    color: var(--sienna);
+}
+
+.payment-na {
+    background: var(--parchment-deep);
+    color: var(--text-secondary);
+}
+
+/* ── Mark as Paid Form ─────────────────────── */
+.mark-paid-section {
+    margin-top: 12px;
+}
+
+.mark-paid-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.mark-paid-form .form-select {
+    max-width: 200px;
+}
+
 /* ── Transitions ────────────────────────────── */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
@@ -1596,11 +1876,32 @@ watch(() => form.value.stage_id, fetchSalableBatches)
 
 /* ── Responsive ─────────────────────────────── */
 @media (max-width: 767.98px) {
+    .desktop-only { display: none; }
+    .mobile-only { display: block; }
+
     .page-header { margin-bottom: 18px; }
     .page-title { font-size: 1.35rem; }
     .form-row { flex-direction: column; gap: 0; }
     .detail-grid { grid-template-columns: repeat(2, 1fr); }
     .reject-form { flex-direction: column; width: 100%; }
     .reject-form .form-control { min-width: unset; width: 100%; }
+
+    .tabs-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .tab-actions {
+        justify-content: flex-end;
+    }
+
+    .mark-paid-form {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .mark-paid-form .form-select {
+        max-width: 100%;
+    }
 }
 </style>

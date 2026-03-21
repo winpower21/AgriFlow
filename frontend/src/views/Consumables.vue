@@ -1015,9 +1015,11 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Modal } from "bootstrap";
 import api from "../utils/api";
 import { useAuthStore } from "../stores/auth";
+import { useReportsStore } from "@/stores/reports";
 
 // ── Auth ─────────────────────────────────────────────
 const auth = useAuthStore();
+const reportsStore = useReportsStore();
 const isAdmin = computed(() => {
     const roles = auth.userRoles;
     if (!roles) return false;
@@ -1263,6 +1265,7 @@ async function submitCategory() {
             description: newCategoryDesc.value.trim() || null,
         });
         categories.value.push(res.data);
+        reportsStore.invalidate('consumables');
         newCategoryName.value = "";
         newCategoryDesc.value = "";
     } catch (err) {
@@ -1273,6 +1276,7 @@ async function submitCategory() {
 async function deleteCategory(id) {
     try {
         await api.delete(`/consumable-categories/${id}`);
+        reportsStore.invalidate('consumables');
         categories.value = categories.value.filter((c) => c.id !== id);
         // Clear filter if the deleted category was selected
         if (filterCategoryId.value === id) {
@@ -1297,6 +1301,7 @@ async function deleteItem() {
     deleteItemError.value = "";
     try {
         await api.delete(`/consumables/${deletingItem.value.id}`);
+        reportsStore.invalidate('consumables');
         items.value = items.value.filter((i) => i.id !== deletingItem.value.id);
         bsDeleteItemModal.hide();
         deletingItem.value = null;
@@ -1319,6 +1324,7 @@ async function deletePurchase() {
     deletePurchaseError.value = "";
     try {
         await api.delete(`/consumables/purchases/${deletingPurchase.value.id}`);
+        reportsStore.invalidate('consumables');
         purchases.value = purchases.value.filter((p) => p.id !== deletingPurchase.value.id);
         bsDeletePurchaseModal.hide();
         deletingPurchase.value = null;
@@ -1360,6 +1366,7 @@ async function submitItemForm() {
             const res = await api.post("/consumables/", payload);
             items.value.push(res.data);
         }
+        reportsStore.invalidate('consumables');
         bsItemModal.hide();
     } catch (err) {
         itemFormError.value =
@@ -1375,6 +1382,7 @@ async function toggleActive(item) {
             description: item.description || null,
             is_active: !item.is_active,
         });
+        reportsStore.invalidate('consumables');
         const idx = items.value.findIndex((i) => i.id === item.id);
         if (idx !== -1) items.value[idx] = res.data;
     } catch (err) {
@@ -1415,6 +1423,7 @@ async function submitPurchaseForm() {
             payload
         );
         purchases.value.unshift(res.data);
+        reportsStore.invalidate('consumables');
         bsPurchaseModal.hide();
         // Refresh items to update stock totals
         await fetchItems();
@@ -1490,6 +1499,7 @@ function toggleExpanded(requestId) {
 async function approveItem(requestId, index) {
     try {
         await api.patch(`/approvals/${requestId}/items/${index}`, { action: "approve" });
+        reportsStore.invalidate('consumables');
         await fetchApprovals();
         await fetchPurchases();
         await fetchItems();
@@ -1535,6 +1545,7 @@ async function submitApproveWithEdits() {
             },
         });
         editingApprovalItem.value = null;
+        reportsStore.invalidate('consumables');
         await fetchApprovals();
         await fetchPurchases();
         await fetchItems();
@@ -1558,6 +1569,7 @@ async function confirmReject() {
             action: "reject",
             rejection_note: rejectNote.value.trim() || null,
         });
+        reportsStore.invalidate('consumables');
         bsRejectModal.hide();
         await fetchApprovals();
     } catch (err) {
@@ -1568,6 +1580,7 @@ async function confirmReject() {
 async function approveAll(requestId) {
     try {
         await api.post(`/approvals/${requestId}/approve-all`);
+        reportsStore.invalidate('consumables');
         await fetchApprovals();
         await fetchPurchases();
         await fetchItems();

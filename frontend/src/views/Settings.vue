@@ -84,6 +84,10 @@
                         <input type="checkbox" v-model="newItem.is_salable" />
                         <span class="salable-label">Salable</span>
                     </label>
+                    <label v-if="isTransformationTypes" class="salable-toggle">
+                        <input type="checkbox" v-model="newItem.measures_personnel_efficiency" />
+                        <span class="salable-label">Measures Efficiency</span>
+                    </label>
                 </div>
                 <button
                     class="btn-add"
@@ -95,8 +99,30 @@
                 </button>
             </div>
 
-            <!-- Items List -->
-            <TransitionGroup v-if="activeTab !== 'unitConversion'" name="list" tag="div" class="items-list">
+            <!-- Batch Stages Tree View -->
+            <div v-if="activeTab === 'batchStages'" class="stage-tree">
+                <StageTreeLevel
+                    :nodes="stageTree"
+                    :depth="0"
+                    :editing-id="editingId"
+                    :edit-form="editForm"
+                    :drag-state="dragState"
+                    @start-edit="startEdit"
+                    @save-edit="saveEdit"
+                    @cancel-edit="cancelEdit"
+                    @open-delete="openDeleteModal"
+                    @open-icon-picker="openIconPicker"
+                    @open-color-picker="openColorPicker"
+                    @drag-start="onDragStart"
+                    @drag-over="onDragOver"
+                    @drag-leave="onDragLeave"
+                    @drop="onDrop"
+                    @drag-end="onDragEnd"
+                />
+            </div>
+
+            <!-- Items List (non-batchStages tabs) -->
+            <TransitionGroup v-if="activeTab !== 'unitConversion' && activeTab !== 'batchStages'" name="list" tag="div" class="items-list">
                 <div
                     v-for="item in getItems(activeTab)"
                     :key="item.id"
@@ -114,7 +140,7 @@
                             >
                                 {{ item.description }}
                             </span>
-                            <span v-if="isBatchStages && item.is_salable" class="salable-badge">Salable</span>
+                            <span v-if="isTransformationTypes && item.measures_personnel_efficiency" class="salable-badge efficiency-badge">Efficiency</span>
                         </div>
                         <div class="item-actions">
                             <button
@@ -155,9 +181,9 @@
                                 @keydown.enter="saveEdit"
                                 @keydown.escape="cancelEdit"
                             />
-                            <label v-if="isBatchStages" class="salable-toggle">
-                                <input type="checkbox" v-model="editForm.is_salable" />
-                                <span class="salable-label">Salable</span>
+                            <label v-if="isTransformationTypes" class="salable-toggle">
+                                <input type="checkbox" v-model="editForm.measures_personnel_efficiency" />
+                                <span class="salable-label">Measures Efficiency</span>
                             </label>
                         </div>
                         <div class="item-actions">
@@ -188,6 +214,54 @@
             >
                 <i class="bi" :class="currentTab.icon"></i>
                 <p>No {{ currentTab.label.toLowerCase() }} yet</p>
+            </div>
+        </div>
+
+        <!-- Icon Picker Popover (outside content-panel to avoid overflow:hidden clipping) -->
+        <div v-if="iconPickerStageId" class="picker-overlay" @click.self="closeIconPicker">
+            <div class="picker-popover icon-picker" :style="pickerPosition">
+                <div class="picker-header">
+                    <span class="picker-title">Choose Icon</span>
+                    <button class="picker-close" @click="closeIconPicker">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div class="icon-grid">
+                    <button
+                        v-for="icon in STAGE_ICONS"
+                        :key="icon.class"
+                        class="icon-option"
+                        :class="{ selected: getStageById(iconPickerStageId)?.icon === icon.class }"
+                        :title="icon.label"
+                        @click="selectIcon(icon.class)"
+                    >
+                        <i class="bi" :class="icon.class"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Color Picker Popover (outside content-panel to avoid overflow:hidden clipping) -->
+        <div v-if="colorPickerStageId" class="picker-overlay" @click.self="closeColorPicker">
+            <div class="picker-popover color-picker" :style="pickerPosition">
+                <div class="picker-header">
+                    <span class="picker-title">Choose Color</span>
+                    <button class="picker-close" @click="closeColorPicker">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div class="color-grid">
+                    <button
+                        v-for="color in STAGE_COLORS"
+                        :key="color"
+                        class="color-option"
+                        :class="{ selected: getStageById(colorPickerStageId)?.color === color }"
+                        :style="{ background: color }"
+                        @click="selectColor(color)"
+                    >
+                        <i v-if="getStageById(colorPickerStageId)?.color === color" class="bi bi-check-lg"></i>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -235,9 +309,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, defineComponent, h } from "vue";
 import { Modal } from "bootstrap";
 import api from "../utils/api";
+import { STAGE_COLORS, STAGE_ICONS, DEFAULT_STAGE_COLOR, DEFAULT_STAGE_ICON } from "@/utils/colorPalette";
 
 // ── Tab Config ──────────────────────────────────────
 
@@ -296,6 +371,7 @@ const hasDescription = computed(() => {
 });
 
 const isBatchStages = computed(() => activeTab.value === "batchStages");
+const isTransformationTypes = computed(() => activeTab.value === "transformationTypes");
 
 // ── Data ────────────────────────────────────────────
 
@@ -362,7 +438,7 @@ function getRef(key) {
 
 // ── Add ─────────────────────────────────────────────
 
-const newItem = ref({ name: "", description: "", is_salable: false });
+const newItem = ref({ name: "", description: "", is_salable: false, measures_personnel_efficiency: true });
 
 async function handleAdd() {
     if (!newItem.value.name.trim()) return;
@@ -374,11 +450,14 @@ async function handleAdd() {
     if (isBatchStages.value) {
         payload.is_salable = newItem.value.is_salable;
     }
+    if (isTransformationTypes.value) {
+        payload.measures_personnel_efficiency = newItem.value.measures_personnel_efficiency;
+    }
 
     try {
         const response = await api.post(getEndpoint(), payload);
         getRef().value.push(response.data);
-        newItem.value = { name: "", description: "", is_salable: false };
+        newItem.value = { name: "", description: "", is_salable: false, measures_personnel_efficiency: true };
     } catch (error) {
         console.error("Failed to add item:", error);
     }
@@ -387,7 +466,7 @@ async function handleAdd() {
 // ── Inline Edit ─────────────────────────────────────
 
 const editingId = ref(null);
-const editForm = ref({ name: "", description: "", is_salable: false });
+const editForm = ref({ name: "", description: "", is_salable: false, measures_personnel_efficiency: true });
 const editNameInput = ref(null);
 
 function startEdit(item) {
@@ -396,6 +475,7 @@ function startEdit(item) {
         name: item.name,
         description: item.description || "",
         is_salable: item.is_salable || false,
+        measures_personnel_efficiency: item.measures_personnel_efficiency ?? true,
     };
     nextTick(() => {
         const inputs = document.querySelectorAll(
@@ -407,7 +487,7 @@ function startEdit(item) {
 
 function cancelEdit() {
     editingId.value = null;
-    editForm.value = { name: "", description: "", is_salable: false };
+    editForm.value = { name: "", description: "", is_salable: false, measures_personnel_efficiency: true };
 }
 
 async function saveEdit() {
@@ -419,6 +499,9 @@ async function saveEdit() {
     }
     if (isBatchStages.value) {
         payload.is_salable = editForm.value.is_salable;
+    }
+    if (isTransformationTypes.value) {
+        payload.measures_personnel_efficiency = editForm.value.measures_personnel_efficiency;
     }
 
     try {
@@ -478,6 +561,475 @@ async function fetchAll() {
     }
     await fetchConversionRate();
 }
+
+// ── Batch Stage Tree ────────────────────────────────
+
+const stageTree = computed(() => {
+    const stages = batchStages.value;
+    if (!stages.length) return [];
+    return buildTree(stages, null);
+});
+
+function buildTree(stages, parentId) {
+    return stages
+        .filter((s) => (s.parent_id ?? null) === parentId)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .map((s) => ({
+            ...s,
+            children: buildTree(stages, s.id),
+        }));
+}
+
+function getStageById(id) {
+    return batchStages.value.find((s) => s.id === id) || null;
+}
+
+// ── Drag and Drop ──────────────────────────────────
+
+const dragState = ref({
+    draggedId: null,
+    targetId: null,
+    dropZone: null, // 'before' | 'after' | 'child'
+});
+
+function onDragStart(stageId) {
+    dragState.value.draggedId = stageId;
+}
+
+function onDragOver(event, stageId, depth) {
+    event.preventDefault();
+    if (stageId === dragState.value.draggedId) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const height = rect.height;
+    const x = event.clientX - rect.left;
+    const indentThreshold = (depth + 1) * 24 + 60;
+
+    let zone;
+    if (y < height * 0.3) {
+        zone = "before";
+    } else if (x > indentThreshold && y > height * 0.5) {
+        zone = "child";
+    } else {
+        zone = "after";
+    }
+
+    dragState.value.targetId = stageId;
+    dragState.value.dropZone = zone;
+}
+
+function onDragLeave(event) {
+    // Only clear if leaving the actual element (not entering a child)
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+        dragState.value.targetId = null;
+        dragState.value.dropZone = null;
+    }
+}
+
+function onDragEnd() {
+    dragState.value = { draggedId: null, targetId: null, dropZone: null };
+}
+
+function isDescendant(stages, parentId, childId) {
+    const children = stages.filter((s) => s.parent_id === parentId);
+    for (const c of children) {
+        if (c.id === childId) return true;
+        if (isDescendant(stages, c.id, childId)) return true;
+    }
+    return false;
+}
+
+async function onDrop(event) {
+    event.preventDefault();
+    const { draggedId, targetId, dropZone } = dragState.value;
+    if (!draggedId || !targetId || draggedId === targetId) {
+        onDragEnd();
+        return;
+    }
+
+    // Prevent dropping a parent onto its own descendant
+    if (dropZone === "child" && isDescendant(batchStages.value, draggedId, targetId)) {
+        onDragEnd();
+        return;
+    }
+
+    const target = getStageById(targetId);
+    if (!target) { onDragEnd(); return; }
+
+    let newParentId;
+    let siblings;
+
+    if (dropZone === "child") {
+        newParentId = targetId;
+        siblings = batchStages.value.filter(
+            (s) => s.parent_id === targetId && s.id !== draggedId,
+        );
+    } else {
+        newParentId = target.parent_id ?? null;
+        siblings = batchStages.value.filter(
+            (s) =>
+                (s.parent_id ?? null) === (target.parent_id ?? null) &&
+                s.id !== draggedId,
+        );
+    }
+
+    // Build new order
+    siblings.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+    const targetIdx = siblings.findIndex((s) => s.id === targetId);
+    const insertAt =
+        dropZone === "before"
+            ? targetIdx
+            : dropZone === "child"
+              ? siblings.length
+              : targetIdx + 1;
+
+    const dragged = getStageById(draggedId);
+    siblings.splice(insertAt < 0 ? 0 : insertAt, 0, dragged);
+
+    // Build reorder payload for ALL stages (update moved item + affected siblings)
+    const reorderPayload = [];
+    siblings.forEach((s, i) => {
+        reorderPayload.push({
+            id: s.id,
+            parent_id: newParentId,
+            sort_order: i,
+        });
+    });
+
+    // Also include all other stages that aren't in this sibling set
+    const siblingIds = new Set(reorderPayload.map((r) => r.id));
+    batchStages.value.forEach((s) => {
+        if (!siblingIds.has(s.id)) {
+            reorderPayload.push({
+                id: s.id,
+                parent_id: s.parent_id ?? null,
+                sort_order: s.sort_order ?? 0,
+            });
+        }
+    });
+
+    onDragEnd();
+
+    try {
+        const response = await api.put(
+            "/settings/batch-stages/reorder",
+            reorderPayload,
+        );
+        batchStages.value = response.data;
+    } catch (error) {
+        console.error("Failed to reorder stages:", error);
+    }
+}
+
+// ── Icon Picker ─────────────────────────────────────
+
+const iconPickerStageId = ref(null);
+const colorPickerStageId = ref(null);
+const pickerPosition = ref({});
+
+function openIconPicker(stageId, event) {
+    closeColorPicker();
+    iconPickerStageId.value = stageId;
+    positionPicker(event);
+}
+
+function closeIconPicker() {
+    iconPickerStageId.value = null;
+}
+
+async function selectIcon(iconClass) {
+    const stageId = iconPickerStageId.value;
+    if (!stageId) return;
+    try {
+        const response = await api.put(`/settings/batch-stages/${stageId}`, {
+            icon: iconClass,
+        });
+        const idx = batchStages.value.findIndex((s) => s.id === stageId);
+        if (idx !== -1) batchStages.value[idx] = response.data;
+    } catch (error) {
+        console.error("Failed to update icon:", error);
+    }
+    closeIconPicker();
+}
+
+// ── Color Picker ────────────────────────────────────
+
+function openColorPicker(stageId, event) {
+    closeIconPicker();
+    colorPickerStageId.value = stageId;
+    positionPicker(event);
+}
+
+function closeColorPicker() {
+    colorPickerStageId.value = null;
+}
+
+async function selectColor(color) {
+    const stageId = colorPickerStageId.value;
+    if (!stageId) return;
+    try {
+        const response = await api.put(`/settings/batch-stages/${stageId}`, {
+            color: color,
+        });
+        const idx = batchStages.value.findIndex((s) => s.id === stageId);
+        if (idx !== -1) batchStages.value[idx] = response.data;
+    } catch (error) {
+        console.error("Failed to update color:", error);
+    }
+    closeColorPicker();
+}
+
+function positionPicker(event) {
+    const btn = event.currentTarget || event.target;
+    const rect = btn.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+
+    let top = rect.bottom + 8;
+    let left = rect.left;
+
+    // Keep popover within viewport
+    if (left + 300 > viewportW) left = viewportW - 320;
+    if (left < 10) left = 10;
+    if (top + 300 > viewportH) top = rect.top - 310;
+
+    pickerPosition.value = {
+        position: "fixed",
+        top: `${top}px`,
+        left: `${left}px`,
+        zIndex: 2000,
+    };
+}
+
+// ── StageTreeLevel Component (inline) ───────────────
+
+const StageTreeLevel = defineComponent({
+    name: "StageTreeLevel",
+    props: {
+        nodes: Array,
+        depth: Number,
+        editingId: Number,
+        editForm: Object,
+        dragState: Object,
+    },
+    emits: [
+        "startEdit",
+        "saveEdit",
+        "cancelEdit",
+        "openDelete",
+        "openIconPicker",
+        "openColorPicker",
+        "dragStart",
+        "dragOver",
+        "dragLeave",
+        "drop",
+        "dragEnd",
+    ],
+    setup(props, { emit }) {
+        return () => {
+            if (!props.nodes || !props.nodes.length) return null;
+
+            const items = props.nodes.map((node) => {
+                const isEditing = props.editingId === node.id;
+                const ds = props.dragState;
+                const isDragTarget = ds.targetId === node.id && ds.draggedId !== node.id;
+                const isDragging = ds.draggedId === node.id;
+
+                const dropIndicatorClass =
+                    isDragTarget && ds.dropZone
+                        ? `drop-indicator-${ds.dropZone}`
+                        : "";
+
+                // Build children recursively
+                const childrenVnode =
+                    node.children && node.children.length
+                        ? h(StageTreeLevel, {
+                              nodes: node.children,
+                              depth: props.depth + 1,
+                              editingId: props.editingId,
+                              editForm: props.editForm,
+                              dragState: props.dragState,
+                              onStartEdit: (item) => emit("startEdit", item),
+                              onSaveEdit: () => emit("saveEdit"),
+                              onCancelEdit: () => emit("cancelEdit"),
+                              onOpenDelete: (item) => emit("openDelete", item),
+                              onOpenIconPicker: (id, ev) =>
+                                  emit("openIconPicker", id, ev),
+                              onOpenColorPicker: (id, ev) =>
+                                  emit("openColorPicker", id, ev),
+                              onDragStart: (id) => emit("dragStart", id),
+                              onDragOver: (ev, id, d) =>
+                                  emit("dragOver", ev, id, d),
+                              onDragLeave: (ev) => emit("dragLeave", ev),
+                              onDrop: (ev) => emit("drop", ev),
+                              onDragEnd: () => emit("dragEnd"),
+                          })
+                        : null;
+
+                const nodeColor = node.color || DEFAULT_STAGE_COLOR;
+                const nodeIcon = node.icon || DEFAULT_STAGE_ICON;
+
+                // View mode content
+                const viewContent = !isEditing
+                    ? h("div", { class: "stage-node-content" }, [
+                          // Drag handle
+                          h(
+                              "span",
+                              { class: "drag-handle", title: "Drag to reorder" },
+                              [h("i", { class: "bi bi-grip-vertical" })],
+                          ),
+                          // Color swatch
+                          h("button", {
+                              class: "color-swatch",
+                              style: { background: nodeColor },
+                              title: "Change color",
+                              onClick: (ev) => {
+                                  ev.stopPropagation();
+                                  emit("openColorPicker", node.id, ev);
+                              },
+                          }),
+                          // Icon button
+                          h(
+                              "button",
+                              {
+                                  class: "icon-btn",
+                                  title: "Change icon",
+                                  onClick: (ev) => {
+                                      ev.stopPropagation();
+                                      emit("openIconPicker", node.id, ev);
+                                  },
+                              },
+                              [h("i", { class: `bi ${nodeIcon}` })],
+                          ),
+                          // Name
+                          h("span", { class: "stage-name" }, node.name),
+                          // Salable badge
+                          node.is_salable
+                              ? h("span", { class: "salable-badge" }, "Salable")
+                              : null,
+                          // Spacer
+                          h("span", { style: "flex:1" }),
+                          // Actions
+                          h("div", { class: "item-actions" }, [
+                              h(
+                                  "button",
+                                  {
+                                      class: "btn-action btn-edit",
+                                      title: "Edit",
+                                      onClick: (ev) => {
+                                          ev.stopPropagation();
+                                          emit("startEdit", node);
+                                      },
+                                  },
+                                  [h("i", { class: "bi bi-pencil" })],
+                              ),
+                              h(
+                                  "button",
+                                  {
+                                      class: "btn-action btn-delete",
+                                      title: "Delete",
+                                      onClick: (ev) => {
+                                          ev.stopPropagation();
+                                          emit("openDelete", node);
+                                      },
+                                  },
+                                  [h("i", { class: "bi bi-trash3" })],
+                              ),
+                          ]),
+                      ])
+                    : null;
+
+                // Edit mode content
+                const editContent = isEditing
+                    ? h("div", { class: "stage-node-content stage-edit-mode" }, [
+                          h("input", {
+                              class: "form-control form-control-sm",
+                              value: props.editForm.name,
+                              placeholder: "Name",
+                              onInput: (ev) => {
+                                  props.editForm.name = ev.target.value;
+                              },
+                              onKeydown: (ev) => {
+                                  if (ev.key === "Enter") emit("saveEdit");
+                                  if (ev.key === "Escape") emit("cancelEdit");
+                              },
+                          }),
+                          h("label", { class: "salable-toggle" }, [
+                              h("input", {
+                                  type: "checkbox",
+                                  checked: props.editForm.is_salable,
+                                  onChange: (ev) => {
+                                      props.editForm.is_salable =
+                                          ev.target.checked;
+                                  },
+                              }),
+                              h("span", { class: "salable-label" }, "Salable"),
+                          ]),
+                          h("span", { style: "flex:1" }),
+                          h("div", { class: "item-actions" }, [
+                              h(
+                                  "button",
+                                  {
+                                      class: "btn-action btn-save",
+                                      title: "Save",
+                                      disabled: !(
+                                          props.editForm.name &&
+                                          props.editForm.name.trim()
+                                      ),
+                                      onClick: () => emit("saveEdit"),
+                                  },
+                                  [h("i", { class: "bi bi-check-lg" })],
+                              ),
+                              h(
+                                  "button",
+                                  {
+                                      class: "btn-action btn-cancel",
+                                      title: "Cancel",
+                                      onClick: () => emit("cancelEdit"),
+                                  },
+                                  [h("i", { class: "bi bi-x-lg" })],
+                              ),
+                          ]),
+                      ])
+                    : null;
+
+                return h("div", { key: node.id, class: "stage-tree-branch" }, [
+                    h(
+                        "div",
+                        {
+                            class: [
+                                "stage-node",
+                                dropIndicatorClass,
+                                isDragging ? "is-dragging" : "",
+                            ]
+                                .filter(Boolean)
+                                .join(" "),
+                            style: {
+                                paddingLeft: `${props.depth * 24 + 12}px`,
+                            },
+                            draggable: !isEditing,
+                            onDragstart: (ev) => {
+                                ev.dataTransfer.effectAllowed = "move";
+                                emit("dragStart", node.id);
+                            },
+                            onDragover: (ev) =>
+                                emit("dragOver", ev, node.id, props.depth),
+                            onDragleave: (ev) => emit("dragLeave", ev),
+                            onDrop: (ev) => emit("drop", ev),
+                            onDragend: () => emit("dragEnd"),
+                        },
+                        [viewContent, editContent],
+                    ),
+                    childrenVnode,
+                ]);
+            });
+
+            return h("div", { class: "stage-tree-level" }, items);
+        };
+    },
+});
 
 // ── Lifecycle ───────────────────────────────────────
 
@@ -981,6 +1533,19 @@ onBeforeUnmount(() => {
     .edit-inputs {
         flex-direction: column;
     }
+
+    .picker-popover {
+        min-width: 200px;
+        max-width: calc(100vw - 32px);
+    }
+
+    .icon-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .color-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
 }
 
 @media (max-width: 575.98px) {
@@ -1064,5 +1629,404 @@ onBeforeUnmount(() => {
     background: rgba(74, 103, 65, 0.1);
     color: var(--moss);
     flex-shrink: 0;
+}
+
+.efficiency-badge {
+    background: rgba(91, 155, 213, 0.1);
+    color: #5B9BD5;
+}
+
+/* ── Picker Overlay & Popover ──────────────── */
+.picker-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1999;
+}
+
+.picker-popover {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 12px;
+    min-width: 240px;
+    max-width: 320px;
+}
+
+.picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.picker-title {
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+}
+
+.picker-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.picker-close:hover {
+    background: var(--parchment-deep);
+    color: var(--text-primary);
+}
+
+/* Icon Grid */
+.icon-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+}
+
+.icon-option {
+    width: 38px;
+    height: 38px;
+    border: 1.5px solid var(--border-light);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    padding: 0;
+}
+
+.icon-option:hover {
+    border-color: var(--sage);
+    color: var(--moss);
+    background: rgba(74, 103, 65, 0.06);
+}
+
+.icon-option.selected {
+    border-color: var(--moss);
+    color: var(--moss);
+    background: rgba(74, 103, 65, 0.12);
+    box-shadow: 0 0 0 2px var(--moss-faded);
+}
+
+/* Color Grid */
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+}
+
+.color-option {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s, box-shadow 0.15s;
+    padding: 0;
+    color: rgba(0, 0, 0, 0.5);
+    font-size: 0.75rem;
+}
+
+.color-option:hover {
+    transform: scale(1.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.color-option.selected {
+    border-color: rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 0 3px var(--bg-card), 0 0 0 5px var(--moss);
+}
+
+/* ── Stage Tree ────────────────────────────── */
+.stage-tree {
+    position: relative;
+}
+</style>
+
+<!-- Unscoped styles for StageTreeLevel (inline defineComponent with h() render functions).
+     Vue scoped CSS doesn't reach elements rendered by child components via h(). -->
+<style>
+.stage-tree .stage-tree-level {
+    /* no extra styling needed; just a container */
+}
+
+.stage-tree .stage-node {
+    display: flex;
+    align-items: center;
+    padding-right: 12px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.15s ease;
+    position: relative;
+    cursor: default;
+}
+
+.stage-tree .stage-node:hover {
+    background: rgba(138, 154, 123, 0.04);
+}
+
+.stage-tree .stage-node.is-dragging {
+    opacity: 0.4;
+}
+
+.stage-tree .stage-node-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+    padding: 8px 0;
+}
+
+.stage-tree .stage-edit-mode {
+    gap: 8px;
+}
+
+.stage-tree .stage-edit-mode .form-control-sm {
+    font-size: 0.85rem;
+    padding: 6px 10px;
+    border-radius: 7px;
+    max-width: 220px;
+}
+
+/* Drag handle */
+.stage-tree .drag-handle {
+    cursor: grab;
+    color: var(--text-secondary);
+    opacity: 0.4;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    transition: opacity 0.15s;
+}
+
+.stage-tree .drag-handle:hover {
+    opacity: 0.8;
+}
+
+.stage-tree .stage-node[draggable="true"] .drag-handle {
+    cursor: grab;
+}
+
+/* Color swatch button */
+.stage-tree .color-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.15s, box-shadow 0.15s;
+    padding: 0;
+}
+
+.stage-tree .color-swatch:hover {
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Icon button */
+.stage-tree .icon-btn {
+    background: none;
+    border: 1.5px solid var(--border);
+    border-radius: 7px;
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    padding: 0;
+}
+
+.stage-tree .icon-btn:hover {
+    border-color: var(--sage);
+    color: var(--moss);
+    background: rgba(74, 103, 65, 0.06);
+}
+
+/* Stage name in tree */
+.stage-tree .stage-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Drop Zone Indicators ──────────────────── */
+.stage-tree .drop-indicator-before::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--moss);
+    border-radius: 2px;
+    z-index: 10;
+}
+
+.stage-tree .drop-indicator-after::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--moss);
+    border-radius: 2px;
+    z-index: 10;
+}
+
+.stage-tree .drop-indicator-child {
+    background: rgba(74, 103, 65, 0.08) !important;
+    outline: 2px dashed var(--moss);
+    outline-offset: -2px;
+    border-radius: 6px;
+}
+
+
+/* ── Action Buttons (inside h() child component) ── */
+.stage-tree .item-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.stage-tree .btn-action {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+}
+
+.stage-tree .btn-edit:hover {
+    border-color: var(--harvest);
+    color: #8a6f2a;
+    background: rgba(196, 163, 90, 0.08);
+}
+
+.stage-tree .btn-delete:hover {
+    border-color: var(--sienna);
+    color: var(--sienna);
+    background: rgba(181, 105, 77, 0.06);
+}
+
+.stage-tree .btn-save {
+    border-color: var(--moss);
+    color: var(--moss);
+}
+
+.stage-tree .btn-save:hover:not(:disabled) {
+    background: rgba(74, 103, 65, 0.1);
+}
+
+.stage-tree .btn-save:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.stage-tree .btn-cancel {
+    border-color: var(--border);
+    color: var(--text-secondary);
+}
+
+.stage-tree .btn-cancel:hover {
+    border-color: var(--sienna);
+    color: var(--sienna);
+    background: rgba(181, 105, 77, 0.06);
+}
+
+/* ── Salable Toggle & Badge (inside h() child component) ── */
+.stage-tree .salable-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.stage-tree .salable-toggle input[type="checkbox"] {
+    accent-color: var(--moss);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.stage-tree .salable-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.stage-tree .salable-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(74, 103, 65, 0.1);
+    color: var(--moss);
+    flex-shrink: 0;
+}
+
+/* ── Responsive Tree ───────────────────────── */
+@media (max-width: 767.98px) {
+    .stage-tree .stage-node {
+        padding-right: 8px;
+    }
+
+    .stage-tree .stage-node-content {
+        gap: 6px;
+    }
+
+    .stage-tree .stage-name {
+        font-size: 0.82rem;
+    }
+
+    .stage-tree .icon-btn {
+        width: 26px;
+        height: 26px;
+        font-size: 0.85rem;
+    }
+
+    .stage-tree .color-swatch {
+        width: 18px;
+        height: 18px;
+    }
+
 }
 </style>

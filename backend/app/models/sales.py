@@ -41,6 +41,12 @@ class Sale(Base):
     invoice_number: Mapped[str | None] = mapped_column(String(100))
     notes: Mapped[str | None] = mapped_column(String(500))
 
+    # Payment tracking
+    is_paid: Mapped[bool] = mapped_column(default=False)
+    payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    paid_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    paid_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(), onupdate=func.now()
@@ -51,6 +57,7 @@ class Sale(Base):
     stage: Mapped["BatchStage"] = relationship("BatchStage")
     created_by: Mapped["User"] = relationship("User", foreign_keys=[created_by_id])
     reviewed_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[reviewed_by_id])
+    paid_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[paid_by_id])
     allocations: Mapped[List["SaleAllocation"]] = relationship(
         back_populates="sale", cascade="all, delete-orphan"
     )

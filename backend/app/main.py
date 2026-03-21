@@ -53,6 +53,12 @@ from .routers.plantation import locations_router
 from .routers.transformation import types_router
 from .routers.weather_google import location_weather_router
 
+# Ensure upload directories exist
+upload_root = Path(settings.UPLOAD_DIR)
+upload_root.mkdir(exist_ok=True)
+(upload_root / "personnel").mkdir(parents=True, exist_ok=True)
+print(f"Upload directory ready: {upload_root.resolve()}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,12 +77,6 @@ async def lifespan(app: FastAPI):
     """
     # --- Startup ---
     print("Application starting up...")
-
-    # Ensure upload directories exist
-    upload_root = Path(settings.UPLOAD_DIR)
-    upload_root.mkdir(exist_ok=True)
-    (upload_root / "personnel").mkdir(parents=True, exist_ok=True)
-    print(f"Upload directory ready: {upload_root.resolve()}")
 
     # Use a short-lived session purely for the seeding operation
     db = SessionLocal()

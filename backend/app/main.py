@@ -28,12 +28,30 @@ from sqlalchemy import text
 from .config import settings
 from .database import SessionLocal, engine
 from .models.user import Role
-from .routers import approval, auth, batch, consumable, customer, dashboard, expense, general, personnel, plantation, reports, sale, transformation, users, vehicle, weather_google
-from .routers.transformation import types_router
-from .routers.weather_google import location_weather_router
-from .routers.plantation import locations_router
+from .routers import (
+    approval,
+    auth,
+    batch,
+    consumable,
+    customer,
+    dashboard,
+    expense,
+    general,
+    personnel,
+    plantation,
+    reports,
+    sale,
+    transformation,
+    users,
+    vehicle,
+    weather_google,
+)
+
 # Aliased to avoid collision with the stdlib/app-level `settings` object
 from .routers import settings as settings_route
+from .routers.plantation import locations_router
+from .routers.transformation import types_router
+from .routers.weather_google import location_weather_router
 
 
 @asynccontextmanager
@@ -56,6 +74,7 @@ async def lifespan(app: FastAPI):
 
     # Ensure upload directories exist
     upload_root = Path(settings.UPLOAD_DIR)
+    upload_root.mkdir(exist_ok=True)
     (upload_root / "personnel").mkdir(parents=True, exist_ok=True)
     print(f"Upload directory ready: {upload_root.resolve()}")
 
@@ -80,16 +99,19 @@ async def lifespan(app: FastAPI):
 
     # Seed "Labour" expense category (system-protected, cannot be deleted)
     from .models.expense import ExpenseCategory
+
     try:
-        labour_exists = db.query(ExpenseCategory).filter(
-            ExpenseCategory.name == "Labour"
-        ).first()
+        labour_exists = (
+            db.query(ExpenseCategory).filter(ExpenseCategory.name == "Labour").first()
+        )
         if not labour_exists:
-            db.add(ExpenseCategory(
-                name="Labour",
-                description="Wages and labour costs",
-                is_system=True,
-            ))
+            db.add(
+                ExpenseCategory(
+                    name="Labour",
+                    description="Wages and labour costs",
+                    is_system=True,
+                )
+            )
             db.commit()
             print("Labour expense category seeded.")
         else:
@@ -103,15 +125,19 @@ async def lifespan(app: FastAPI):
 
     # Seed "Lease Cost" expense category (system-protected)
     try:
-        lease_cost_exists = db.query(ExpenseCategory).filter(
-            ExpenseCategory.name == "Lease Cost"
-        ).first()
+        lease_cost_exists = (
+            db.query(ExpenseCategory)
+            .filter(ExpenseCategory.name == "Lease Cost")
+            .first()
+        )
         if not lease_cost_exists:
-            db.add(ExpenseCategory(
-                name="Lease Cost",
-                description="Plantation lease cost payments",
-                is_system=True,
-            ))
+            db.add(
+                ExpenseCategory(
+                    name="Lease Cost",
+                    description="Plantation lease cost payments",
+                    is_system=True,
+                )
+            )
             db.commit()
             print("Lease Cost expense category seeded.")
         else:
@@ -121,6 +147,7 @@ async def lifespan(app: FastAPI):
             print("Lease Cost expense category already exists.")
     except Exception as e:
         print(f"Error seeding Lease Cost category: {e}")
+    db.close()
     yield
 
     # --- Shutdown ---
@@ -152,36 +179,38 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,  # Parsed list from ALLOWED_ORIGINS env var
-    allow_credentials=True,               # Allow cookies / Authorization headers
-    allow_methods=["*"],                  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],                  # Allow all request headers
+    allow_credentials=True,  # Allow cookies / Authorization headers
+    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allow all request headers
 )
 
 # ---------------------------------------------------------------------------
 # Router registration — each router handles a distinct domain area.
 # Routers define their own URL prefixes and tags internally.
 # ---------------------------------------------------------------------------
-app.include_router(approval.router)         # /approvals — approval workflow
-app.include_router(auth.router)             # /auth — login, registration, token refresh
-app.include_router(users.router)            # /users — user management
-app.include_router(personnel.router)        # /personnel — farm worker records
-app.include_router(plantation.router)       # /plantations — plantation/crop tracking
-app.include_router(locations_router)        # /locations — location search and resolve
-app.include_router(expense.router)          # /expenses — expense tracking
-app.include_router(settings_route.router)   # /settings — application settings
-app.include_router(consumable.router)       # /consumables — consumable items and purchases
+app.include_router(approval.router)  # /approvals — approval workflow
+app.include_router(auth.router)  # /auth — login, registration, token refresh
+app.include_router(users.router)  # /users — user management
+app.include_router(personnel.router)  # /personnel — farm worker records
+app.include_router(plantation.router)  # /plantations — plantation/crop tracking
+app.include_router(locations_router)  # /locations — location search and resolve
+app.include_router(expense.router)  # /expenses — expense tracking
+app.include_router(settings_route.router)  # /settings — application settings
+app.include_router(consumable.router)  # /consumables — consumable items and purchases
 app.include_router(consumable.categories_router)  # /consumable-categories
-app.include_router(vehicle.router)          # /vehicles — vehicle management
-app.include_router(batch.router)            # /batches — batch CRUD + genealogy
-app.include_router(transformation.router)   # /transformations — transformation CRUD
-app.include_router(types_router)            # /transformation-types — lookup
-app.include_router(sale.router)              # /sales — sales CRUD + approval
-app.include_router(customer.router)          # /customers — customer search + create
-app.include_router(dashboard.router)        # /dashboard — aggregations
-app.include_router(reports.router)          # /reports — analytics for reports page
-app.include_router(general.router)          # /general — shared/utility endpoints
-app.include_router(weather_google.router)       # /api/weather — pass-through to Google API
-app.include_router(location_weather_router)    # /api/weather — location-centric cached weather
+app.include_router(vehicle.router)  # /vehicles — vehicle management
+app.include_router(batch.router)  # /batches — batch CRUD + genealogy
+app.include_router(transformation.router)  # /transformations — transformation CRUD
+app.include_router(types_router)  # /transformation-types — lookup
+app.include_router(sale.router)  # /sales — sales CRUD + approval
+app.include_router(customer.router)  # /customers — customer search + create
+app.include_router(dashboard.router)  # /dashboard — aggregations
+app.include_router(reports.router)  # /reports — analytics for reports page
+app.include_router(general.router)  # /general — shared/utility endpoints
+app.include_router(weather_google.router)  # /api/weather — pass-through to Google API
+app.include_router(
+    location_weather_router
+)  # /api/weather — location-centric cached weather
 
 
 # Root endpoint

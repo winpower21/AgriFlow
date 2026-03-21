@@ -2,10 +2,10 @@ import axios from "axios";
 import router from "@/router";
 import { useAuthStore } from "@/stores/auth";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 const api = axios.create({
-    baseURL: API_BASE,
+  baseURL: API_BASE,
 });
 
 /* -------------------------
@@ -13,14 +13,14 @@ const api = axios.create({
    Attach JWT automatically
 --------------------------*/
 api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem("token");
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => Promise.reject(error),
+  (config) => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error),
 );
 
 /* -------------------------
@@ -28,21 +28,21 @@ api.interceptors.request.use(
    Handle 401 globally
 --------------------------*/
 api.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        if (error.response && error.response.status === 401) {
-            const authStore = useAuthStore();
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      const authStore = useAuthStore();
 
-            authStore.logout();
+      authStore.logout();
 
-            // Redirect to login (if not already there)
-            if (router.currentRoute.value.path !== "/login") {
-                router.push("/login");
-            }
-        }
+      // Redirect to login (if not already there)
+      if (router.currentRoute.value.path !== "/login") {
+        router.push("/login");
+      }
+    }
 
-        return Promise.reject(error);
-    },
+    return Promise.reject(error);
+  },
 );
 
 export default api;

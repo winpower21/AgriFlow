@@ -1,184 +1,216 @@
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import axios from 'axios'
-import { DEFAULT_STAGE_COLOR, DEFAULT_STAGE_ICON } from '@/utils/colorPalette'
-import { Bar } from 'vue-chartjs'
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js'
+import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { useRouter } from "vue-router";
+import { useAuthStore } from "@/stores/auth";
+import axios from "axios";
+import { DEFAULT_STAGE_COLOR, DEFAULT_STAGE_ICON } from "@/utils/colorPalette";
+import { Bar } from "vue-chartjs";
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Tooltip,
+} from "chart.js";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-const auth = useAuthStore()
-const router = useRouter()
+const auth = useAuthStore();
+const router = useRouter();
 
-const summary = ref(null)
-const dailyOutput = ref([])
-const recentActivity = ref([])
-const activeTransformations = ref([])
-const loading = ref(true)
-const error = ref(null)
+const summary = ref(null);
+const dailyOutput = ref([]);
+const recentActivity = ref([]);
+const activeTransformations = ref([]);
+const loading = ref(true);
+const error = ref(null);
 
-const BASE = 'http://localhost:8000'
-const headers = () => ({ Authorization: `Bearer ${auth.token}` })
+const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const headers = () => ({ Authorization: `Bearer ${auth.token}` });
 
-const todayStr = new Date().toISOString().slice(0, 10)
-const chartEndDate = ref(todayStr)
+const todayStr = new Date().toISOString().slice(0, 10);
+const chartEndDate = ref(todayStr);
 
-const isEndDateToday = computed(() => chartEndDate.value >= todayStr)
+const isEndDateToday = computed(() => chartEndDate.value >= todayStr);
 
 const dateRangeLabel = computed(() => {
-    const end = new Date(chartEndDate.value + 'T00:00:00')
-    const start = new Date(end)
-    start.setDate(start.getDate() - 6)
-    const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    return `${fmt(start)} – ${fmt(end)}`
-})
+    const end = new Date(chartEndDate.value + "T00:00:00");
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    const fmt = (d) =>
+        d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${fmt(start)} – ${fmt(end)}`;
+});
 
 function shiftDate(days) {
-    const d = new Date(chartEndDate.value + 'T00:00:00')
-    d.setDate(d.getDate() + days)
-    const iso = d.toISOString().slice(0, 10)
+    const d = new Date(chartEndDate.value + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    const iso = d.toISOString().slice(0, 10);
     if (iso > todayStr) {
-        chartEndDate.value = todayStr
+        chartEndDate.value = todayStr;
     } else {
-        chartEndDate.value = iso
+        chartEndDate.value = iso;
     }
 }
 
 async function loadDailyOutput() {
     try {
-        const res = await axios.get(`${BASE}/dashboard/daily-output?end_date=${chartEndDate.value}`, { headers: headers() })
-        dailyOutput.value = res.data
+        const res = await axios.get(
+            `${BASE}/dashboard/daily-output?end_date=${chartEndDate.value}`,
+            { headers: headers() },
+        );
+        dailyOutput.value = res.data;
     } catch (e) {
         // silently fail for chart reload
     }
 }
 
 async function loadAll() {
-    loading.value = true
-    error.value = null
+    loading.value = true;
+    error.value = null;
     try {
         const [sumRes, dailyRes, actRes, txRes] = await Promise.all([
             axios.get(`${BASE}/dashboard/summary`, { headers: headers() }),
-            axios.get(`${BASE}/dashboard/daily-output?end_date=${chartEndDate.value}`, { headers: headers() }),
-            axios.get(`${BASE}/dashboard/recent-activity`, { headers: headers() }),
-            axios.get(`${BASE}/transformations/?status=in_progress`, { headers: headers() }),
-        ])
-        summary.value = sumRes.data
-        dailyOutput.value = dailyRes.data
-        recentActivity.value = actRes.data
-        activeTransformations.value = txRes.data
+            axios.get(
+                `${BASE}/dashboard/daily-output?end_date=${chartEndDate.value}`,
+                { headers: headers() },
+            ),
+            axios.get(`${BASE}/dashboard/recent-activity`, {
+                headers: headers(),
+            }),
+            axios.get(`${BASE}/transformations/?status=in_progress`, {
+                headers: headers(),
+            }),
+        ]);
+        summary.value = sumRes.data;
+        dailyOutput.value = dailyRes.data;
+        recentActivity.value = actRes.data;
+        activeTransformations.value = txRes.data;
     } catch (e) {
-        error.value = 'Failed to load dashboard data.'
+        error.value = "Failed to load dashboard data.";
     } finally {
-        loading.value = false
+        loading.value = false;
     }
 }
 
-onMounted(loadAll)
+onMounted(loadAll);
 
 watch(chartEndDate, () => {
-    loadDailyOutput()
-})
+    loadDailyOutput();
+});
 
 const stageSummaries = computed(() => {
-    if (!summary.value?.stages) return []
-    return summary.value.stages.map(s => ({
+    if (!summary.value?.stages) return [];
+    return summary.value.stages.map((s) => ({
         key: s.stage_name,
         label: s.stage_name.charAt(0) + s.stage_name.slice(1).toLowerCase(),
         icon: s.icon || DEFAULT_STAGE_ICON,
         color: s.color || DEFAULT_STAGE_COLOR,
         count: s.batch_count,
         total_kg: Number(s.total_remaining_kg ?? 0),
-    }))
-})
+    }));
+});
 
 const kpis = computed(() => {
-    if (!summary.value) return { total_batches: 0, active_transformations: 0, avg_yield: null, total_kg: 0 }
+    if (!summary.value)
+        return {
+            total_batches: 0,
+            active_transformations: 0,
+            avg_yield: null,
+            total_kg: 0,
+        };
     return {
-        total_batches: summary.value.stages?.reduce((acc, s) => acc + s.batch_count, 0) ?? 0,
+        total_batches:
+            summary.value.stages?.reduce((acc, s) => acc + s.batch_count, 0) ??
+            0,
         active_transformations: summary.value.active_transformation_count ?? 0,
-        avg_yield: summary.value.avg_yield_rate_30d != null
-            ? Number(summary.value.avg_yield_rate_30d).toFixed(1)
-            : null,
+        avg_yield:
+            summary.value.avg_yield_rate_30d != null
+                ? Number(summary.value.avg_yield_rate_30d).toFixed(1)
+                : null,
         total_kg: Number(summary.value.total_kg_in_pipeline ?? 0),
-    }
-})
+    };
+});
 
-const hasOutputData = computed(() => dailyOutput.value.some(d => d.total_output_kg > 0))
+const hasOutputData = computed(() =>
+    dailyOutput.value.some((d) => d.total_output_kg > 0),
+);
 
 const chartData = computed(() => ({
-    labels: dailyOutput.value.map(d => d.date_label),
-    datasets: [{
-        data: dailyOutput.value.map(d => d.total_output_kg),
-        backgroundColor: '#4A6741',
-        borderRadius: 6,
-        barPercentage: 0.7,
-    }]
-}))
+    labels: dailyOutput.value.map((d) => d.date_label),
+    datasets: [
+        {
+            data: dailyOutput.value.map((d) => d.total_output_kg),
+            backgroundColor: "#4A6741",
+            borderRadius: 6,
+            barPercentage: 0.7,
+        },
+    ],
+}));
 
 function externalTooltipHandler(context) {
-    const { chart, tooltip } = context
-    let tooltipEl = chart.canvas.parentNode.querySelector('.chartjs-custom-tooltip')
+    const { chart, tooltip } = context;
+    let tooltipEl = chart.canvas.parentNode.querySelector(
+        ".chartjs-custom-tooltip",
+    );
 
     if (!tooltipEl) {
-        tooltipEl = document.createElement('div')
-        tooltipEl.classList.add('chartjs-custom-tooltip')
-        chart.canvas.parentNode.appendChild(tooltipEl)
+        tooltipEl = document.createElement("div");
+        tooltipEl.classList.add("chartjs-custom-tooltip");
+        chart.canvas.parentNode.appendChild(tooltipEl);
     }
 
     if (tooltip.opacity === 0) {
-        tooltipEl.style.opacity = '0'
-        tooltipEl.style.pointerEvents = 'none'
-        return
+        tooltipEl.style.opacity = "0";
+        tooltipEl.style.pointerEvents = "none";
+        return;
     }
 
-    const dataIndex = tooltip.dataPoints?.[0]?.dataIndex
-    if (dataIndex == null) return
+    const dataIndex = tooltip.dataPoints?.[0]?.dataIndex;
+    if (dataIndex == null) return;
 
-    const item = dailyOutput.value[dataIndex]
-    if (!item) return
+    const item = dailyOutput.value[dataIndex];
+    if (!item) return;
 
-    let html = `<div class="tooltip-title">${item.date_label}</div>`
-    html += `<div class="tooltip-total">${formatKg(item.total_output_kg)}</div>`
+    let html = `<div class="tooltip-title">${item.date_label}</div>`;
+    html += `<div class="tooltip-total">${formatKg(item.total_output_kg)}</div>`;
 
     if (item.stages && item.stages.length > 0) {
-        html += '<div class="tooltip-stages">'
+        html += '<div class="tooltip-stages">';
         for (const s of item.stages) {
-            const color = s.stage_color || '#888'
+            const color = s.stage_color || "#888";
             html += `<div class="tooltip-stage-row">
                 <span class="tooltip-swatch" style="background:${color}"></span>
                 <span class="tooltip-stage-name">${s.stage_name}</span>
                 <span class="tooltip-stage-kg">${formatKg(s.output_kg)}</span>
-            </div>`
+            </div>`;
         }
-        html += '</div>'
+        html += "</div>";
     }
 
-    tooltipEl.innerHTML = html
-    tooltipEl.style.opacity = '1'
-    tooltipEl.style.pointerEvents = 'auto'
+    tooltipEl.innerHTML = html;
+    tooltipEl.style.opacity = "1";
+    tooltipEl.style.pointerEvents = "auto";
 
-    const isMobile = window.innerWidth < 768
+    const isMobile = window.innerWidth < 768;
     if (isMobile) {
-        tooltipEl.style.left = '0'
-        tooltipEl.style.right = '0'
-        tooltipEl.style.bottom = '0'
-        tooltipEl.style.top = 'auto'
-        tooltipEl.style.transform = 'none'
-        tooltipEl.style.width = '100%'
-        tooltipEl.classList.add('mobile')
+        tooltipEl.style.left = "0";
+        tooltipEl.style.right = "0";
+        tooltipEl.style.bottom = "0";
+        tooltipEl.style.top = "auto";
+        tooltipEl.style.transform = "none";
+        tooltipEl.style.width = "100%";
+        tooltipEl.classList.add("mobile");
     } else {
-        tooltipEl.classList.remove('mobile')
-        tooltipEl.style.width = ''
-        tooltipEl.style.right = ''
-        tooltipEl.style.bottom = ''
-        const left = tooltip.caretX
-        const top = tooltip.caretY
-        tooltipEl.style.left = left + 'px'
-        tooltipEl.style.top = top + 'px'
-        tooltipEl.style.transform = 'translate(-50%, -110%)'
+        tooltipEl.classList.remove("mobile");
+        tooltipEl.style.width = "";
+        tooltipEl.style.right = "";
+        tooltipEl.style.bottom = "";
+        const left = tooltip.caretX;
+        const top = tooltip.caretY;
+        tooltipEl.style.left = left + "px";
+        tooltipEl.style.top = top + "px";
+        tooltipEl.style.transform = "translate(-50%, -110%)";
     }
 }
 
@@ -199,53 +231,56 @@ const chartOptions = computed(() => ({
         y: {
             beginAtZero: true,
             ticks: { font: { size: 11 } },
-            grid: { color: 'rgba(0,0,0,0.05)' },
-        }
-    }
-}))
+            grid: { color: "rgba(0,0,0,0.05)" },
+        },
+    },
+}));
 
 function formatKg(kg) {
-    const n = Number(kg)
-    if (kg == null || isNaN(n)) return '—'
-    if (n >= 1000) return (n / 1000).toFixed(1) + ' t'
-    return n.toFixed(1) + ' kg'
+    const n = Number(kg);
+    if (kg == null || isNaN(n)) return "—";
+    if (n >= 1000) return (n / 1000).toFixed(1) + " t";
+    return n.toFixed(1) + " kg";
 }
 
 function formatDate(dateStr) {
-    if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+    if (!dateStr) return "—";
+    return new Date(dateStr).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+    });
 }
 
 function activityIcon(type) {
     const map = {
-        harvest: 'bi-plus-circle-fill',
-        batch_created: 'bi-plus-circle-fill',
-        transformation_complete: 'bi-check-circle-fill',
-        transformation_completed: 'bi-check-circle-fill',
-        transformation_started: 'bi-play-circle-fill',
-        batch_moved: 'bi-arrow-right-circle-fill',
-    }
-    return map[type] ?? 'bi-circle-fill'
+        harvest: "bi-plus-circle-fill",
+        batch_created: "bi-plus-circle-fill",
+        transformation_complete: "bi-check-circle-fill",
+        transformation_completed: "bi-check-circle-fill",
+        transformation_started: "bi-play-circle-fill",
+        batch_moved: "bi-arrow-right-circle-fill",
+    };
+    return map[type] ?? "bi-circle-fill";
 }
 
 function activityColor(type) {
     const map = {
-        harvest: 'var(--moss)',
-        batch_created: 'var(--moss)',
-        transformation_complete: 'var(--sienna)',
-        transformation_completed: 'var(--sienna)',
-        transformation_started: 'var(--harvest)',
-        batch_moved: '#6f42c1',
-    }
-    return map[type] ?? 'var(--text-secondary)'
+        harvest: "var(--moss)",
+        batch_created: "var(--moss)",
+        transformation_complete: "var(--sienna)",
+        transformation_completed: "var(--sienna)",
+        transformation_started: "var(--harvest)",
+        batch_moved: "#6f42c1",
+    };
+    return map[type] ?? "var(--text-secondary)";
 }
 
 function goToTransformation(id) {
-    router.push({ name: 'transformation-detail', params: { id } })
+    router.push({ name: "transformation-detail", params: { id } });
 }
 
 function newTransformation() {
-    router.push({ name: 'transformations', query: { new: 'true' } })
+    router.push({ name: "transformations", query: { new: "true" } });
 }
 </script>
 
@@ -255,9 +290,11 @@ function newTransformation() {
         <div class="page-header animate-fade-in-up">
             <div>
                 <h2 class="page-title">
-                    Welcome back{{ auth.name ? ', ' + auth.name : '' }}
+                    Welcome back{{ auth.name ? ", " + auth.name : "" }}
                 </h2>
-                <p class="page-subtitle">Here's what's happening on the farm today.</p>
+                <p class="page-subtitle">
+                    Here's what's happening on the farm today.
+                </p>
             </div>
             <button class="btn-add" @click="newTransformation">
                 <i class="bi bi-plus-lg"></i>
@@ -283,7 +320,10 @@ function newTransformation() {
                     v-for="stage in stageSummaries"
                     :key="stage.key"
                     class="stage-tile"
-                    :style="{ borderLeftColor: stage.color, '--stage-color': stage.color }"
+                    :style="{
+                        borderLeftColor: stage.color,
+                        '--stage-color': stage.color,
+                    }"
                 >
                     <i class="bi" :class="stage.icon + ' stage-icon'"></i>
                     <div class="stage-label">{{ stage.label }}</div>
@@ -294,24 +334,42 @@ function newTransformation() {
 
             <!-- CHARTS ROW -->
             <div class="charts-row animate-fade-in-up animate-delay-2">
-
                 <!-- OUTPUT TREND -->
                 <div class="content-panel chart-panel">
                     <div class="panel-header">
                         <span class="panel-title">Output (7 Days)</span>
                     </div>
                     <div class="date-picker-row">
-                        <button class="btn-date-nav" @click="shiftDate(-7)" title="Previous 7 days">
+                        <button
+                            class="btn-date-nav"
+                            @click="shiftDate(-7)"
+                            title="Previous 7 days"
+                        >
                             <i class="bi bi-chevron-left"></i>
                         </button>
-                        <span class="date-range-label">{{ dateRangeLabel }}</span>
-                        <button class="btn-date-nav" @click="shiftDate(7)" :disabled="isEndDateToday" title="Next 7 days">
+                        <span class="date-range-label">{{
+                            dateRangeLabel
+                        }}</span>
+                        <button
+                            class="btn-date-nav"
+                            @click="shiftDate(7)"
+                            :disabled="isEndDateToday"
+                            title="Next 7 days"
+                        >
                             <i class="bi bi-chevron-right"></i>
                         </button>
-                        <input type="date" v-model="chartEndDate" :max="todayStr" class="date-picker-input" />
+                        <input
+                            type="date"
+                            v-model="chartEndDate"
+                            :max="todayStr"
+                            class="date-picker-input"
+                        />
                     </div>
                     <div class="panel-body">
-                        <div v-if="!hasOutputData" class="empty-state small-empty">
+                        <div
+                            v-if="!hasOutputData"
+                            class="empty-state small-empty"
+                        >
                             <i class="bi bi-bar-chart"></i>
                             <p>No output data for this period</p>
                         </div>
@@ -327,27 +385,52 @@ function newTransformation() {
                         <span class="panel-title">Weight by Stage</span>
                     </div>
                     <div class="panel-body">
-                        <div v-if="!stageSummaries.some(s => s.total_kg > 0)" class="empty-state small-empty">
+                        <div
+                            v-if="!stageSummaries.some((s) => s.total_kg > 0)"
+                            class="empty-state small-empty"
+                        >
                             <i class="bi bi-pie-chart"></i>
                             <p>No batches in pipeline</p>
                         </div>
                         <div v-else class="stage-weight-list">
                             <div
-                                v-for="stage in stageSummaries.filter(s => s.total_kg > 0)"
+                                v-for="stage in stageSummaries.filter(
+                                    (s) => s.total_kg > 0,
+                                )"
                                 :key="stage.key"
                                 class="stage-weight-row"
                             >
-                                <span class="stage-weight-badge" :style="{ background: stage.color }">{{ stage.label }}</span>
+                                <span
+                                    class="stage-weight-badge"
+                                    :style="{ background: stage.color }"
+                                    >{{ stage.label }}</span
+                                >
                                 <div class="stage-weight-bar-wrap">
                                     <div
                                         class="stage-weight-bar"
                                         :style="{
                                             background: stage.color,
-                                            width: Math.max(4, Math.round((stage.total_kg / Math.max(...stageSummaries.map(s => s.total_kg), 1)) * 100)) + '%'
+                                            width:
+                                                Math.max(
+                                                    4,
+                                                    Math.round(
+                                                        (stage.total_kg /
+                                                            Math.max(
+                                                                ...stageSummaries.map(
+                                                                    (s) =>
+                                                                        s.total_kg,
+                                                                ),
+                                                                1,
+                                                            )) *
+                                                            100,
+                                                    ),
+                                                ) + '%',
                                         }"
                                     ></div>
                                 </div>
-                                <span class="stage-weight-val">{{ formatKg(stage.total_kg) }}</span>
+                                <span class="stage-weight-val">{{
+                                    formatKg(stage.total_kg)
+                                }}</span>
                             </div>
                         </div>
                     </div>
@@ -356,33 +439,53 @@ function newTransformation() {
                 <!-- KPI CARDS -->
                 <div class="kpi-stack">
                     <div class="kpi-card animate-fade-in-up animate-delay-2">
-                        <div class="kpi-icon kpi-green"><i class="bi bi-layers"></i></div>
+                        <div class="kpi-icon kpi-green">
+                            <i class="bi bi-layers"></i>
+                        </div>
                         <div class="kpi-body">
-                            <div class="kpi-value">{{ kpis.total_batches }}</div>
+                            <div class="kpi-value">
+                                {{ kpis.total_batches }}
+                            </div>
                             <div class="kpi-label">Batches in Pipeline</div>
                         </div>
                     </div>
                     <div class="kpi-card animate-fade-in-up animate-delay-2">
-                        <div class="kpi-icon kpi-orange"><i class="bi bi-arrow-repeat"></i></div>
+                        <div class="kpi-icon kpi-orange">
+                            <i class="bi bi-arrow-repeat"></i>
+                        </div>
                         <div class="kpi-body">
-                            <div class="kpi-value">{{ kpis.active_transformations }}</div>
+                            <div class="kpi-value">
+                                {{ kpis.active_transformations }}
+                            </div>
                             <div class="kpi-label">Active Transformations</div>
                         </div>
                     </div>
                     <div class="kpi-card animate-fade-in-up animate-delay-2">
-                        <div class="kpi-icon kpi-blue"><i class="bi bi-graph-up-arrow"></i></div>
+                        <div class="kpi-icon kpi-blue">
+                            <i class="bi bi-graph-up-arrow"></i>
+                        </div>
                         <div class="kpi-body">
                             <div class="kpi-value">
-                                {{ kpis.avg_yield != null ? kpis.avg_yield + '%' : '—' }}
+                                {{
+                                    kpis.avg_yield != null
+                                        ? kpis.avg_yield + "%"
+                                        : "—"
+                                }}
                             </div>
                             <div class="kpi-label">Avg Yield Rate (30d)</div>
                         </div>
                     </div>
                     <div class="kpi-card animate-fade-in-up animate-delay-2">
-                        <div class="kpi-icon kpi-purple"><i class="bi bi-weight"></i></div>
+                        <div class="kpi-icon kpi-purple">
+                            <i class="bi bi-weight"></i>
+                        </div>
                         <div class="kpi-body">
-                            <div class="kpi-value">{{ formatKg(kpis.total_kg) }}</div>
-                            <div class="kpi-label">Total Weight in Pipeline</div>
+                            <div class="kpi-value">
+                                {{ formatKg(kpis.total_kg) }}
+                            </div>
+                            <div class="kpi-label">
+                                Total Weight in Pipeline
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -390,20 +493,30 @@ function newTransformation() {
 
             <!-- BOTTOM ROW -->
             <div class="bottom-row animate-fade-in-up animate-delay-3">
-
                 <!-- ACTIVE TRANSFORMATIONS -->
                 <div class="content-panel">
                     <div class="panel-header">
                         <span class="panel-title">Active Transformations</span>
-                        <button class="btn-panel-action" @click="newTransformation">
+                        <button
+                            class="btn-panel-action"
+                            @click="newTransformation"
+                        >
                             <i class="bi bi-plus-lg"></i> New
                         </button>
                     </div>
                     <div class="panel-body no-pad">
-                        <div v-if="!activeTransformations.length" class="empty-state">
+                        <div
+                            v-if="!activeTransformations.length"
+                            class="empty-state"
+                        >
                             <i class="bi bi-arrow-repeat"></i>
                             <p>No active transformations</p>
-                            <button class="btn-empty-action" @click="newTransformation">Start one</button>
+                            <button
+                                class="btn-empty-action"
+                                @click="newTransformation"
+                            >
+                                Start one
+                            </button>
                         </div>
                         <div
                             v-for="tx in activeTransformations"
@@ -413,11 +526,27 @@ function newTransformation() {
                         >
                             <div class="tx-id">T-{{ tx.id }}</div>
                             <div class="tx-info">
-                                <div class="tx-type">{{ tx.type_name ?? tx.transformation_type?.name ?? 'Transformation' }}</div>
+                                <div class="tx-type">
+                                    {{
+                                        tx.type_name ??
+                                        tx.transformation_type?.name ??
+                                        "Transformation"
+                                    }}
+                                </div>
                                 <div class="tx-meta">
                                     Started {{ formatDate(tx.from_date) }}
                                     <template v-if="tx.batch_codes?.length">
-                                        &middot; {{ tx.batch_codes.slice(0, 2).join(', ') }}{{ tx.batch_codes.length > 2 ? ' +' + (tx.batch_codes.length - 2) : '' }}
+                                        &middot;
+                                        {{
+                                            tx.batch_codes
+                                                .slice(0, 2)
+                                                .join(", ")
+                                        }}{{
+                                            tx.batch_codes.length > 2
+                                                ? " +" +
+                                                  (tx.batch_codes.length - 2)
+                                                : ""
+                                        }}
                                     </template>
                                 </div>
                             </div>
@@ -443,13 +572,22 @@ function newTransformation() {
                         >
                             <div
                                 class="activity-icon"
-                                :style="{ color: activityColor(item.event_type) }"
+                                :style="{
+                                    color: activityColor(item.event_type),
+                                }"
                             >
-                                <i class="bi" :class="activityIcon(item.event_type)"></i>
+                                <i
+                                    class="bi"
+                                    :class="activityIcon(item.event_type)"
+                                ></i>
                             </div>
                             <div class="activity-body">
-                                <div class="activity-desc">{{ item.description }}</div>
-                                <div class="activity-time">{{ formatDate(item.date) }}</div>
+                                <div class="activity-desc">
+                                    {{ item.description }}
+                                </div>
+                                <div class="activity-time">
+                                    {{ formatDate(item.date) }}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -503,7 +641,9 @@ function newTransformation() {
     white-space: nowrap;
     transition: opacity 0.15s;
 }
-.btn-add:hover { opacity: 0.88; }
+.btn-add:hover {
+    opacity: 0.88;
+}
 
 /* -- ALERT -- */
 .alert-banner {
@@ -545,13 +685,29 @@ function newTransformation() {
     flex-direction: column;
     align-items: center;
     gap: 0.2rem;
-    border-left: 4px solid var(--stage-color, #B0B8C1);
+    border-left: 4px solid var(--stage-color, #b0b8c1);
     background: color-mix(in srgb, var(--stage-color) 8%, var(--bg-card, #fff));
 }
-.stage-tile .stage-icon { font-size: 1.3rem; color: var(--stage-color); }
-.stage-label { font-size: 0.72rem; font-weight: 600; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.04em; }
-.stage-count { font-size: 1.5rem; font-weight: 700; line-height: 1; }
-.stage-kg { font-size: 0.72rem; opacity: 0.85; }
+.stage-tile .stage-icon {
+    font-size: 1.3rem;
+    color: var(--stage-color);
+}
+.stage-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.stage-count {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.stage-kg {
+    font-size: 0.72rem;
+    opacity: 0.85;
+}
 
 /* ==============================
    CHARTS ROW
@@ -602,7 +758,9 @@ function newTransformation() {
     cursor: pointer;
     transition: opacity 0.15s;
 }
-.btn-panel-action:hover { opacity: 0.88; }
+.btn-panel-action:hover {
+    opacity: 0.88;
+}
 
 /* -- Date picker row -- */
 .date-picker-row {
@@ -625,10 +783,17 @@ function newTransformation() {
     color: var(--text-primary);
     cursor: pointer;
     font-size: 0.8rem;
-    transition: background 0.12s, opacity 0.12s;
+    transition:
+        background 0.12s,
+        opacity 0.12s;
 }
-.btn-date-nav:hover:not(:disabled) { background: var(--surface-hover, #f3f4f6); }
-.btn-date-nav:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-date-nav:hover:not(:disabled) {
+    background: var(--surface-hover, #f3f4f6);
+}
+.btn-date-nav:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
 .date-range-label {
     font-size: 0.85rem;
     font-weight: 600;
@@ -672,7 +837,7 @@ function newTransformation() {
     transition: opacity 0.15s ease;
     z-index: 10;
     min-width: 140px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 :deep(.chartjs-custom-tooltip.mobile) {
     border-radius: 8px 8px 0 0;
@@ -693,7 +858,7 @@ function newTransformation() {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
-    border-top: 1px solid rgba(255,255,255,0.15);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
     padding-top: 0.3rem;
 }
 :deep(.tooltip-stage-row) {
@@ -784,10 +949,22 @@ function newTransformation() {
     font-size: 1rem;
     flex-shrink: 0;
 }
-.kpi-green  { background: #d1fae5; color: #065f46; }
-.kpi-orange { background: #ffedd5; color: #9a3412; }
-.kpi-blue   { background: #dbeafe; color: #1e40af; }
-.kpi-purple { background: #ede9fe; color: #5b21b6; }
+.kpi-green {
+    background: #d1fae5;
+    color: #065f46;
+}
+.kpi-orange {
+    background: #ffedd5;
+    color: #9a3412;
+}
+.kpi-blue {
+    background: #dbeafe;
+    color: #1e40af;
+}
+.kpi-purple {
+    background: #ede9fe;
+    color: #5b21b6;
+}
 .kpi-value {
     font-size: 1.2rem;
     font-weight: 700;
@@ -820,24 +997,43 @@ function newTransformation() {
     cursor: pointer;
     transition: background 0.12s;
 }
-.tx-row:last-child { border-bottom: none; }
-.tx-row:hover { background: var(--surface-hover, #f9fafb); }
+.tx-row:last-child {
+    border-bottom: none;
+}
+.tx-row:hover {
+    background: var(--surface-hover, #f9fafb);
+}
 .tx-id {
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--moss);
     min-width: 42px;
 }
-.tx-info { flex: 1; min-width: 0; }
-.tx-type { font-size: 0.88rem; font-weight: 600; color: var(--text-primary); }
-.tx-meta { font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tx-info {
+    flex: 1;
+    min-width: 0;
+}
+.tx-type {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.tx-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .status-dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
 }
-.active-dot { background: #22c55e; }
+.active-dot {
+    background: #22c55e;
+}
 
 /* -- Activity rows -- */
 .activity-row {
@@ -847,7 +1043,9 @@ function newTransformation() {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border-light, #e5e7eb);
 }
-.activity-row:last-child { border-bottom: none; }
+.activity-row:last-child {
+    border-bottom: none;
+}
 .activity-icon {
     font-size: 1rem;
     margin-top: 0.1rem;
@@ -869,10 +1067,21 @@ function newTransformation() {
     padding: 2rem 1rem;
     color: var(--text-secondary);
 }
-.empty-state i { font-size: 2rem; display: block; margin-bottom: 0.5rem; }
-.empty-state p { margin: 0 0 0.75rem; font-size: 0.9rem; }
-.small-empty { padding: 1.5rem 0.5rem; }
-.small-empty i { font-size: 1.5rem; }
+.empty-state i {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.5rem;
+}
+.empty-state p {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+}
+.small-empty {
+    padding: 1.5rem 0.5rem;
+}
+.small-empty i {
+    font-size: 1.5rem;
+}
 .btn-empty-action {
     padding: 0.4rem 1rem;
     background: var(--moss);
@@ -887,13 +1096,27 @@ function newTransformation() {
    ANIMATIONS
 ============================== */
 @keyframes fade-in-up {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
-.animate-fade-in-up { animation: fade-in-up 0.35s ease both; }
-.animate-delay-1 { animation-delay: 0.08s; }
-.animate-delay-2 { animation-delay: 0.16s; }
-.animate-delay-3 { animation-delay: 0.24s; }
+.animate-fade-in-up {
+    animation: fade-in-up 0.35s ease both;
+}
+.animate-delay-1 {
+    animation-delay: 0.08s;
+}
+.animate-delay-2 {
+    animation-delay: 0.16s;
+}
+.animate-delay-3 {
+    animation-delay: 0.24s;
+}
 
 /* ==============================
    RESPONSIVE
@@ -921,12 +1144,19 @@ function newTransformation() {
 }
 
 @media (max-width: 767.98px) {
-    .dashboard-page { padding: 1rem; gap: 1rem; }
+    .dashboard-page {
+        padding: 1rem;
+        gap: 1rem;
+    }
     .stage-bar {
         gap: 0.4rem;
     }
-    .stage-tile { padding: 0.6rem 0.3rem; }
-    .stage-count { font-size: 1.2rem; }
+    .stage-tile {
+        padding: 0.6rem 0.3rem;
+    }
+    .stage-count {
+        font-size: 1.2rem;
+    }
     .charts-row {
         grid-template-columns: 1fr;
     }
@@ -937,7 +1167,9 @@ function newTransformation() {
     .kpi-card {
         flex: 1 1 calc(50% - 0.3rem);
     }
-    .page-title { font-size: 1.3rem; }
+    .page-title {
+        font-size: 1.3rem;
+    }
     .date-picker-row {
         flex-wrap: wrap;
     }
@@ -949,7 +1181,11 @@ function newTransformation() {
 }
 
 @media (max-width: 479.98px) {
-    .stage-label { display: none; }
-    .stage-kg { display: none; }
+    .stage-label {
+        display: none;
+    }
+    .stage-kg {
+        display: none;
+    }
 }
 </style>

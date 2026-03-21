@@ -39,8 +39,15 @@
                             <td>
                                 <div class="person-identity">
                                     <span class="person-avatar">
-                                        <img v-if="p.photo" :src="photoUrl(p.photo)" class="avatar-img" :alt="p.name" />
-                                        <template v-else>{{ getInitials(p.name) }}</template>
+                                        <img
+                                            v-if="p.photo"
+                                            :src="photoUrl(p.photo)"
+                                            class="avatar-img"
+                                            :alt="p.name"
+                                        />
+                                        <template v-else>{{
+                                            getInitials(p.name)
+                                        }}</template>
                                     </span>
                                     <div>
                                         <span class="person-name">{{
@@ -127,8 +134,15 @@
                 <div class="person-card-header">
                     <div class="person-identity">
                         <span class="person-avatar">
-                            <img v-if="p.photo" :src="photoUrl(p.photo)" class="avatar-img" :alt="p.name" />
-                            <template v-else>{{ getInitials(p.name) }}</template>
+                            <img
+                                v-if="p.photo"
+                                :src="photoUrl(p.photo)"
+                                class="avatar-img"
+                                :alt="p.name"
+                            />
+                            <template v-else>{{
+                                getInitials(p.name)
+                            }}</template>
                         </span>
                         <div>
                             <div class="person-name">{{ p.name }}</div>
@@ -209,12 +223,25 @@
                     <div class="modal-body">
                         <!-- Photo picker -->
                         <div class="photo-picker-wrapper">
-                            <div class="photo-picker" @click="photoInputRef.click()">
-                                <img v-if="form.photoPreview" :src="form.photoPreview" class="photo-preview" alt="Preview" />
+                            <div
+                                class="photo-picker"
+                                @click="photoInputRef.click()"
+                            >
+                                <img
+                                    v-if="form.photoPreview"
+                                    :src="form.photoPreview"
+                                    class="photo-preview"
+                                    alt="Preview"
+                                />
                                 <span v-else class="photo-placeholder">
                                     <i class="bi bi-camera"></i>
                                 </span>
-                                <button v-if="form.photoPreview" type="button" class="photo-clear" @click.stop="clearPhoto">
+                                <button
+                                    v-if="form.photoPreview"
+                                    type="button"
+                                    class="photo-clear"
+                                    @click.stop="clearPhoto"
+                                >
                                     <i class="bi bi-x"></i>
                                 </button>
                             </div>
@@ -261,10 +288,7 @@
                                         class="form-select"
                                         required
                                     >
-                                        <option
-                                            disabled
-                                            :value="null"
-                                        >
+                                        <option disabled :value="null">
                                             Select type
                                         </option>
                                         <option
@@ -434,8 +458,8 @@ function getEmptyForm() {
         phone: "",
         address: "",
         is_active: true,
-        photoFile: null,       // File object from picker
-        photoPreview: null,    // object URL for local preview
+        photoFile: null, // File object from picker
+        photoPreview: null, // object URL for local preview
     };
 }
 
@@ -480,7 +504,7 @@ function wageClass(typeName) {
 
 // ── Photo Helpers ────────────────────────────────────
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 function photoUrl(path) {
     return path ? `${API_BASE}/uploads/${path}` : null;
@@ -572,12 +596,12 @@ async function addPersonnel(data) {
         fd.append("name", data.name);
         fd.append("wage_type_id", data.wage_type_id);
         fd.append("current_rate", data.current_rate);
-        if (data.phone)    fd.append("phone", data.phone);
-        if (data.address)  fd.append("address", data.address);
+        if (data.phone) fd.append("phone", data.phone);
+        if (data.address) fd.append("address", data.address);
         if (data.photoFile) fd.append("photo", data.photoFile);
 
         const response = await api.post("/personnel/", fd);
-        reportsStore.invalidate('personnel');
+        reportsStore.invalidate("personnel");
         personnel.value.push(response.data);
     } catch (error) {
         console.error("Failed to add personnel:", error);
@@ -587,16 +611,19 @@ async function addPersonnel(data) {
 async function updatePersonnel(id, data) {
     try {
         const fd = new FormData();
-        if (data.name !== undefined)          fd.append("name", data.name);
-        if (data.wage_type_id !== undefined)  fd.append("wage_type_id", data.wage_type_id);
-        if (data.current_rate !== undefined)  fd.append("current_rate", data.current_rate);
-        if (data.phone !== undefined)         fd.append("phone", data.phone);
-        if (data.address !== undefined)       fd.append("address", data.address);
-        if (data.is_active !== undefined)     fd.append("is_active", data.is_active);
-        if (data.photoFile)                   fd.append("photo", data.photoFile);
+        if (data.name !== undefined) fd.append("name", data.name);
+        if (data.wage_type_id !== undefined)
+            fd.append("wage_type_id", data.wage_type_id);
+        if (data.current_rate !== undefined)
+            fd.append("current_rate", data.current_rate);
+        if (data.phone !== undefined) fd.append("phone", data.phone);
+        if (data.address !== undefined) fd.append("address", data.address);
+        if (data.is_active !== undefined)
+            fd.append("is_active", data.is_active);
+        if (data.photoFile) fd.append("photo", data.photoFile);
 
         const response = await api.put(`/personnel/${id}`, fd);
-        reportsStore.invalidate('personnel');
+        reportsStore.invalidate("personnel");
         const idx = personnel.value.findIndex((p) => p.id === id);
         if (idx !== -1) personnel.value[idx] = response.data;
     } catch (error) {
@@ -613,7 +640,7 @@ async function confirmDelete() {
 async function deletePersonnel(id) {
     try {
         await api.delete(`/personnel/${id}`);
-        reportsStore.invalidate('personnel');
+        reportsStore.invalidate("personnel");
         personnel.value = personnel.value.filter((p) => p.id !== id);
     } catch (error) {
         console.error("Failed to delete personnel:", error);

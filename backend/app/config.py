@@ -45,13 +45,13 @@ class Settings(BaseSettings):
     # SECRET_KEY must be a strong random string in production; it is used
     # by python-jose to sign and verify HS256 JWT tokens.
     SECRET_KEY: str
-    ALGORITHM: str = "HS256"                # JWT signing algorithm
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60   # Token validity window
+    ALGORITHM: str = "HS256"  # JWT signing algorithm
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # Token validity window
 
     # -- CORS -----------------------------------------------------------
     # Comma-separated origins string; parsed into a list via the
     # ``cors_origins`` property (see below).
-    ALLOWED_ORIGINS: str = "http://localhost:5173"
+    ALLOWED_ORIGINS: str
 
     # -- Environment ----------------------------------------------------
     # Controls behaviour like SQLAlchemy SQL echo and uvicorn hot-reload.
@@ -62,8 +62,8 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
 
     # -- External API keys ----------------------------------------------
-    OPENWEATHERMAP_API_KEY: str = ""   # Optional — weather data integration
-    GOOGLE_MAPS_API_KEY: str = ""      # Optional — maps / geocoding
+    OPENWEATHERMAP_API_KEY: str = ""  # Optional — weather data integration
+    GOOGLE_MAPS_API_KEY: str = ""  # Optional — maps / geocoding
 
     # -- Application metadata -------------------------------------------
     # NOTE: APP_NAME is declared twice (above and here). The second
@@ -78,8 +78,8 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
 
     class Config:
-        env_file = ".env"          # Auto-load .env file from working directory
-        case_sensitive = True      # Env var names must match attribute names exactly
+        env_file = ".env"  # Auto-load .env file from working directory
+        case_sensitive = True  # Env var names must match attribute names exactly
 
 
 # Module-level singleton — imported throughout the app as ``settings``.

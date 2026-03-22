@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
-import axios from "axios";
+import api from "@/utils/api";
 import { DEFAULT_STAGE_COLOR, DEFAULT_STAGE_ICON } from "@/utils/colorPalette";
 import { Bar } from "vue-chartjs";
 import {
@@ -25,13 +25,21 @@ const activeTransformations = ref([]);
 const loading = ref(true);
 const error = ref(null);
 
-const BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
-const headers = () => ({ Authorization: `Bearer ${auth.token}` });
 
-const todayStr = new Date().toISOString().slice(0, 10);
-const chartEndDate = ref(todayStr);
+function toLocalDateStr(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
-const isEndDateToday = computed(() => chartEndDate.value >= todayStr);
+const todayStr = toLocalDateStr(new Date());
+const weeksBack = ref(0);
+
+const chartEndDate = computed(() => {
+    const d = new Date(todayStr + "T00:00:00");
+    d.setDate(d.getDate() - weeksBack.value * 7);
+    return toLocalDateStr(d);
+});
+
+const isEndDateToday = computed(() => weeksBack.value === 0);
 
 const dateRangeLabel = computed(() => {
     const end = new Date(chartEndDate.value + "T00:00:00");
@@ -43,21 +51,14 @@ const dateRangeLabel = computed(() => {
 });
 
 function shiftDate(days) {
-    const d = new Date(chartEndDate.value + "T00:00:00");
-    d.setDate(d.getDate() + days);
-    const iso = d.toISOString().slice(0, 10);
-    if (iso > todayStr) {
-        chartEndDate.value = todayStr;
-    } else {
-        chartEndDate.value = iso;
-    }
+    const newWeeks = weeksBack.value - days / 7;
+    weeksBack.value = Math.max(0, newWeeks);
 }
 
 async function loadDailyOutput() {
     try {
-        const res = await axios.get(
-            `${BASE}/dashboard/daily-output?end_date=${chartEndDate.value}`,
-            { headers: headers() },
+        const res = await api.get(
+            `/dashboard/daily-output?end_date=${chartEndDate.value}`,
         );
         dailyOutput.value = res.data;
     } catch (e) {
@@ -70,17 +71,12 @@ async function loadAll() {
     error.value = null;
     try {
         const [sumRes, dailyRes, actRes, txRes] = await Promise.all([
-            axios.get(`${BASE}/dashboard/summary`, { headers: headers() }),
-            axios.get(
-                `${BASE}/dashboard/daily-output?end_date=${chartEndDate.value}`,
-                { headers: headers() },
+            api.get("/dashboard/summary"),
+            api.get(
+                `/dashboard/daily-output?end_date=${chartEndDate.value}`,
             ),
-            axios.get(`${BASE}/dashboard/recent-activity`, {
-                headers: headers(),
-            }),
-            axios.get(`${BASE}/transformations/?status=in_progress`, {
-                headers: headers(),
-            }),
+            api.get("/dashboard/recent-activity"),
+            api.get("/transformations/?status=in_progress"),
         ]);
         summary.value = sumRes.data;
         dailyOutput.value = dailyRes.data;
@@ -308,9 +304,9 @@ function newTransformation() {
         </div>
 
         <!-- LOADING -->
-        <div v-if="loading" class="loading-state animate-fade-in-up">
-            <div class="spinner-border text-secondary" role="status"></div>
-            <span>Loading dashboard…</span>
+        <div v-if="loading" class="empty-state animate-fade-in-up">
+            <i class="bi bi-hourglass-split"></i>
+            <p>Loading dashboard...</p>
         </div>
 
         <template v-else>

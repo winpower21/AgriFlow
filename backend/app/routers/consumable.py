@@ -10,6 +10,7 @@ from ..schemas.consumable import (
     ConsumableCreate, ConsumableSchema, ConsumableUpdate,
     ConsumablePurchaseCreate, ConsumablePurchaseSchema, ConsumableWithStockSchema,
 )
+from ..schemas.response import ApiResponse
 
 router = APIRouter(
     prefix="/consumables",
@@ -19,7 +20,7 @@ router = APIRouter(
 )
 
 
-@router.get("/", response_model=list[ConsumableWithStockSchema])
+@router.get("/", response_model=ApiResponse[list[ConsumableWithStockSchema]])
 def get_consumables(
     search: Optional[str] = Query(None),
     category_id: Optional[int] = Query(None),
@@ -34,25 +35,25 @@ def get_consumables(
         schema.total_purchased = totals["total_purchased"]
         schema.total_remaining = totals["total_remaining"]
         result.append(schema)
-    return result
+    return ApiResponse(data=result)
 
 
-@router.post("/", response_model=ConsumableSchema, status_code=201,
+@router.post("/", response_model=ApiResponse[ConsumableSchema], status_code=201,
              dependencies=[Depends(roles_required("admin"))])
 def create_consumable(data: ConsumableCreate, db: Session = Depends(get_db)):
-    return ConsumableService(db).create(data)
+    return ApiResponse(data=ConsumableService(db).create(data), message="Consumable created successfully", type="success")
 
 
-@router.put("/{consumable_id}", response_model=ConsumableSchema,
+@router.put("/{consumable_id}", response_model=ApiResponse[ConsumableSchema],
             dependencies=[Depends(roles_required("admin"))])
 def update_consumable(consumable_id: int, data: ConsumableUpdate, db: Session = Depends(get_db)):
     result = ConsumableService(db).update(consumable_id, data)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consumable not found")
-    return result
+    return ApiResponse(data=result, message="Consumable updated successfully", type="success")
 
 
-@router.delete("/{consumable_id}", status_code=204,
+@router.delete("/{consumable_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def delete_consumable(consumable_id: int, db: Session = Depends(get_db)):
     result = ConsumableService(db).delete_consumable(consumable_id)
@@ -63,14 +64,15 @@ def delete_consumable(consumable_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot delete: this item has been used in consumptions",
         )
+    return ApiResponse(data=None, message="Consumable deleted successfully", type="success")
 
 
-@router.get("/purchases", response_model=list[ConsumablePurchaseSchema])
+@router.get("/purchases", response_model=ApiResponse[list[ConsumablePurchaseSchema]])
 def get_all_purchases(consumable_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
-    return ConsumableService(db).get_all_purchases(consumable_id=consumable_id)
+    return ApiResponse(data=ConsumableService(db).get_all_purchases(consumable_id=consumable_id))
 
 
-@router.delete("/purchases/{purchase_id}", status_code=204,
+@router.delete("/purchases/{purchase_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def delete_purchase(purchase_id: int, db: Session = Depends(get_db)):
     result = ConsumableService(db).delete_purchase(purchase_id)
@@ -81,20 +83,21 @@ def delete_purchase(purchase_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot delete: purchase has already been partially or fully consumed",
         )
+    return ApiResponse(data=None, message="Purchase deleted successfully", type="success")
 
 
-@router.get("/{consumable_id}/purchases", response_model=list[ConsumablePurchaseSchema])
+@router.get("/{consumable_id}/purchases", response_model=ApiResponse[list[ConsumablePurchaseSchema]])
 def get_purchases(consumable_id: int, db: Session = Depends(get_db)):
-    return ConsumableService(db).get_purchases(consumable_id)
+    return ApiResponse(data=ConsumableService(db).get_purchases(consumable_id))
 
 
-@router.post("/{consumable_id}/purchases", response_model=ConsumablePurchaseSchema, status_code=201,
+@router.post("/{consumable_id}/purchases", response_model=ApiResponse[ConsumablePurchaseSchema], status_code=201,
              dependencies=[Depends(roles_required("admin"))])
 def add_purchase(consumable_id: int, data: ConsumablePurchaseCreate, db: Session = Depends(get_db)):
     result = ConsumableService(db).add_purchase(consumable_id, data)
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consumable not found")
-    return result
+    return ApiResponse(data=result, message="Purchase recorded successfully", type="success")
 
 
 # ── Categories sub-router ──────────────────────────────────────────────────────
@@ -106,19 +109,20 @@ categories_router = APIRouter(
 )
 
 
-@categories_router.get("/", response_model=list[ConsumableCategorySchema])
+@categories_router.get("/", response_model=ApiResponse[list[ConsumableCategorySchema]])
 def get_categories(db: Session = Depends(get_db)):
-    return ConsumableService(db).get_all_categories()
+    return ApiResponse(data=ConsumableService(db).get_all_categories())
 
 
-@categories_router.post("/", response_model=ConsumableCategorySchema, status_code=201,
+@categories_router.post("/", response_model=ApiResponse[ConsumableCategorySchema], status_code=201,
                         dependencies=[Depends(roles_required("admin"))])
 def create_category(data: ConsumableCategoryCreate, db: Session = Depends(get_db)):
-    return ConsumableService(db).create_category(data)
+    return ApiResponse(data=ConsumableService(db).create_category(data), message="Category created successfully", type="success")
 
 
-@categories_router.delete("/{category_id}", status_code=204,
+@categories_router.delete("/{category_id}", response_model=ApiResponse[None],
                           dependencies=[Depends(roles_required("admin"))])
 def delete_category(category_id: int, db: Session = Depends(get_db)):
     if not ConsumableService(db).delete_category(category_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
+    return ApiResponse(data=None, message="Category deleted successfully", type="success")

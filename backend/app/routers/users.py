@@ -33,6 +33,7 @@ from ..core.dependencies import roles_required
 from ..crud import UserService
 from ..database import get_db
 from ..schemas import RoleChange, User, UserCreate, UserUpdate
+from ..schemas.response import ApiResponse
 
 # NOTE: No router-level auth dependency — individual endpoints opt in via
 # ``dependencies=[Depends(roles_required("admin"))]``.  The /register
@@ -47,7 +48,7 @@ router = APIRouter(
 # ---------- Admin-only: list all users ----------
 @router.get(
     "/all",
-    response_model=list[User],
+    response_model=ApiResponse[list[User]],
     status_code=200,
     dependencies=[Depends(roles_required("admin"))],  # Auth: admin role required
 )
@@ -61,7 +62,7 @@ def get_all_users(db: Session = Depends(get_db)):
     user_service = UserService(db)
     users = user_service.get_users()
     if users:
-        return users
+        return ApiResponse(data=users)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No users found")
 
 
@@ -99,7 +100,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 # ---------- Admin-only: list unverified users ----------
 @router.get(
     "/unverified",
-    response_model=list[User],
+    response_model=ApiResponse[list[User]],
     status_code=200,
     dependencies=[Depends(roles_required("admin"))],  # Auth: admin role required
 )
@@ -113,7 +114,7 @@ def get_unverified_users(db: Session = Depends(get_db)):
     user_service = UserService(db)
     unverified_users = user_service.get_unverified_users()
     if unverified_users:
-        return unverified_users
+        return ApiResponse(data=unverified_users)
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND, detail="No unverified users found"
     )
@@ -122,7 +123,7 @@ def get_unverified_users(db: Session = Depends(get_db)):
 # ---------- Admin-only: delete a user ----------
 @router.delete(
     "/delete-user/{id}",
-    response_model=User,
+    response_model=ApiResponse[User],
     status_code=200,
     dependencies=[Depends(roles_required("admin"))],  # Auth: admin role required
 )
@@ -141,13 +142,13 @@ def delete_user(id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    return user
+    return ApiResponse(data=user, message="User deleted successfully", type="success")
 
 
 # ---------- Admin-only: update a user ----------
 @router.put(
     "/update/{id}",
-    response_model=User,
+    response_model=ApiResponse[User],
     status_code=200,
     dependencies=[Depends(roles_required("admin"))],  # Auth: admin role required
 )
@@ -167,13 +168,13 @@ def update_user(id: int, user: UserUpdate, db: Session = Depends(get_db)):
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    return user
+    return ApiResponse(data=user, message="User updated successfully", type="success")
 
 
 # ---------- Admin-only: change a user's role ----------
 @router.put(
     "/change-role/{id}",
-    response_model=User,
+    response_model=ApiResponse[User],
     status_code=200,
     dependencies=[Depends(roles_required("admin"))],  # Auth: admin role required
 )
@@ -194,4 +195,4 @@ def change_user_role(id: int, role_update: RoleChange, db: Session = Depends(get
             detail="User or role not found",
         )
 
-    return user
+    return ApiResponse(data=user, message="User role updated successfully", type="success")

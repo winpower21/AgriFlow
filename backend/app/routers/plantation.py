@@ -37,6 +37,7 @@ from ..schemas.plantation import (
     PlantationUpdate,
 )
 from ..schemas.weather import WeatherSchema
+from ..schemas.response import ApiResponse
 
 # Auth: ``get_current_user`` is a router-level dependency — every endpoint
 # underneath requires a valid JWT bearer token.
@@ -57,13 +58,13 @@ locations_router = APIRouter(
 
 # ── Plantation CRUD ───────────────────────────────────────────────────────────
 
-@router.get("/", response_model=list[PlantationSchema])
+@router.get("/", response_model=ApiResponse[list[PlantationSchema]])
 def get_all_plantations(db: Session = Depends(get_db)):
     """Return all plantations with lease and location data. Auth: any user."""
-    return PlantationService(db).get_all()
+    return ApiResponse(data=PlantationService(db).get_all())
 
 
-@router.get("/{plantation_id}", response_model=PlantationSchema)
+@router.get("/{plantation_id}", response_model=ApiResponse[PlantationSchema])
 def get_plantation(plantation_id: int, db: Session = Depends(get_db)):
     """Return a single plantation by ID. Returns 404 if not found."""
     p = PlantationService(db).get_by_id(plantation_id)
@@ -71,16 +72,16 @@ def get_plantation(plantation_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Plantation not found"
         )
-    return p
+    return ApiResponse(data=p)
 
 
-@router.post("/", response_model=PlantationSchema, status_code=201)
+@router.post("/", response_model=ApiResponse[PlantationSchema], status_code=201)
 def create_plantation(data: PlantationCreate, db: Session = Depends(get_db)):
     """Create a new plantation. Auth: any authenticated user."""
-    return PlantationService(db).create(data)
+    return ApiResponse(data=PlantationService(db).create(data), message="Plantation created successfully", type="success")
 
 
-@router.put("/{plantation_id}", response_model=PlantationSchema)
+@router.put("/{plantation_id}", response_model=ApiResponse[PlantationSchema])
 def update_plantation(
     plantation_id: int, data: PlantationUpdate, db: Session = Depends(get_db)
 ):
@@ -90,10 +91,10 @@ def update_plantation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Plantation not found"
         )
-    return p
+    return ApiResponse(data=p, message="Plantation updated successfully", type="success")
 
 
-@router.delete("/{plantation_id}", status_code=204)
+@router.delete("/{plantation_id}", response_model=ApiResponse[None])
 def delete_plantation(
     plantation_id: int,
     force: bool = Query(False, description="Force delete even if lease history exists"),
@@ -110,22 +111,23 @@ def delete_plantation(
             status_code=status.HTTP_409_CONFLICT,
             detail="Plantation has lease history. Use ?force=true to delete anyway.",
         )
+    return ApiResponse(data=None, message="Plantation deleted successfully", type="success")
 
 
-@router.get("/{plantation_id}/lease-history", response_model=list[LeaseSchema])
+@router.get("/{plantation_id}/lease-history", response_model=ApiResponse[list[LeaseSchema]])
 def get_lease_history(plantation_id: int, db: Session = Depends(get_db)):
     """Return all lease records for a plantation, newest first."""
-    return PlantationService(db).get_lease_history(plantation_id)
+    return ApiResponse(data=PlantationService(db).get_lease_history(plantation_id))
 
 
-@router.get("/{plantation_id}/delete-check", response_model=DeleteCheckResponse)
+@router.get("/{plantation_id}/delete-check", response_model=ApiResponse[DeleteCheckResponse])
 def delete_check(plantation_id: int, db: Session = Depends(get_db)):
     """Check whether a plantation has related history before deletion."""
     count = PlantationService(db).get_lease_history_count(plantation_id)
-    return {"has_history": count > 0, "history_count": count}
+    return ApiResponse(data={"has_history": count > 0, "history_count": count})
 
 
-@router.post("/{plantation_id}/leases", response_model=LeaseSchema, status_code=201)
+@router.post("/{plantation_id}/leases", response_model=ApiResponse[LeaseSchema], status_code=201)
 def add_lease(
     plantation_id: int, data: LeaseAddRequest, db: Session = Depends(get_db)
 ):
@@ -135,12 +137,12 @@ def add_lease(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Plantation not found"
         )
-    return lease
+    return ApiResponse(data=lease, message="Lease record added successfully", type="success")
 
 
 # ── Weather cache ─────────────────────────────────────────────────────────────
 
-@router.get("/{plantation_id}/weather", response_model=WeatherSchema)
+@router.get("/{plantation_id}/weather", response_model=ApiResponse[WeatherSchema])
 async def get_plantation_weather(plantation_id: int, db: Session = Depends(get_db)):
     """Return cached weather or fetch fresh data from Google Weather API.
 
@@ -163,18 +165,18 @@ async def get_plantation_weather(plantation_id: int, db: Session = Depends(get_d
     # Return from cache if a fresh row exists
     cached = service.get_cached_weather(plantation.location_id)
     if cached:
-        return cached
+        return ApiResponse(data=cached)
 
     # Cache miss — call Google Weather API and persist a new row
     loc = plantation.location
     current = await get_current_weather(loc.latitude, loc.longitude)
     hourly = await get_hourly_forecast(loc.latitude, loc.longitude, hours=24)
     raw = {"current": current, "hourly": hourly}
-    return service.save_weather(plantation.location_id, raw, is_manual=False)
+    return ApiResponse(data=service.save_weather(plantation.location_id, raw, is_manual=False))
 
 
 @router.post(
-    "/{plantation_id}/weather/refresh", response_model=WeatherSchema, status_code=201
+    "/{plantation_id}/weather/refresh", response_model=ApiResponse[WeatherSchema], status_code=201
 )
 async def refresh_plantation_weather(
     plantation_id: int, db: Session = Depends(get_db)
@@ -200,7 +202,7 @@ async def refresh_plantation_weather(
     current = await get_current_weather(loc.latitude, loc.longitude)
     hourly = await get_hourly_forecast(loc.latitude, loc.longitude, hours=24)
     raw = {"current": current, "hourly": hourly}
-    return service.save_weather(plantation.location_id, raw, is_manual=True)
+    return ApiResponse(data=service.save_weather(plantation.location_id, raw, is_manual=True), message="Weather data refreshed", type="success")
 
 
 # ── Location search / resolve ─────────────────────────────────────────────────
@@ -269,10 +271,10 @@ async def search_locations(
             # Google API failure must not block DB results from returning
             pass
 
-    return {"results": results, "google_searched": google_searched}
+    return ApiResponse(data={"results": results, "google_searched": google_searched})
 
 
-@locations_router.post("/resolve", response_model=LocationDetailSchema)
+@locations_router.post("/resolve", response_model=ApiResponse[LocationDetailSchema])
 async def resolve_location(
     place_id: str = Query(..., description="Google Place ID to resolve and store"),
     db: Session = Depends(get_db),
@@ -304,4 +306,4 @@ async def resolve_location(
         latitude=details["latitude"],
         longitude=details["longitude"],
     )
-    return loc
+    return ApiResponse(data=loc)

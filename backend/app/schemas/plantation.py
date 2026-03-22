@@ -21,8 +21,8 @@ from pydantic import BaseModel, ConfigDict
 from .batch import BatchSchema
 from .location import LocationSchema
 
-
 # ── Lease schemas ──────────────────────────────────────────────────────────────
+
 
 class LeaseCreate(BaseModel):
     """Request body for creating a new lease tied to a plantation."""
@@ -30,7 +30,7 @@ class LeaseCreate(BaseModel):
     plantation_id: int
     start_date: datetime
     end_date: Optional[datetime] = None
-    cost: Optional[Decimal] = None
+    cost: Decimal
 
 
 class LeaseAddRequest(BaseModel):
@@ -58,6 +58,7 @@ class LeaseSchema(BaseModel):
 
 # ── Plantation schemas ─────────────────────────────────────────────────────────
 
+
 class PlantationCreate(BaseModel):
     """Request body for creating a new plantation.
 
@@ -69,9 +70,9 @@ class PlantationCreate(BaseModel):
     name: str
     location_id: Optional[int] = None
     area_hectares: Optional[Decimal] = None
-    lease_start: Optional[datetime] = None
-    lease_end: Optional[datetime] = None
-    lease_cost: Optional[Decimal] = None
+    lease_start: datetime
+    lease_end: datetime
+    lease_cost: Decimal
 
 
 class PlantationUpdate(BaseModel):

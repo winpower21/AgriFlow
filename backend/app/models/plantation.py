@@ -63,7 +63,8 @@ class Plantation(Base):
 
     # Chronological lease agreements, most recent first
     lease: Mapped[List["PlantationLease"]] = relationship(
-        back_populates="plantation", order_by="PlantationLease.start_date.desc()"
+        back_populates="plantation", order_by="PlantationLease.start_date.desc()",
+        cascade="all, delete-orphan",
     )
 
     location: Mapped["Location"] = relationship(back_populates="plantations")

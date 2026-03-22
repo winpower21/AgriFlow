@@ -139,6 +139,7 @@ class UserService:
             hashed_password=hashed_password,
             full_name=user.full_name,
             is_active=True,
+            is_verified=True,
             role_id=default_role.id,
         )
         if default_role:
@@ -212,15 +213,19 @@ class UserService:
         """Authenticate a user by email and plaintext password.
 
         Looks up the user by email, then verifies the provided plaintext
-        password against the stored bcrypt hash. Returns the User object
-        on success or None on failure (wrong email or wrong password).
+        password against the stored bcrypt hash. Also checks that the
+        account is both active and verified before allowing login.
+
+        Returns a tuple of (User | None, error_reason | None).
+        Error reasons: "invalid_credentials", "not_verified", "not_active".
         """
-        print(
-            f"DEBUG: Authenticating user with email: {email} and password length: {len(password)}"
-        )
         user = self.get_user_by_email(email)
         if not user:
-            return None
+            return None, "invalid_credentials"
         if not verify_password(password, user.hashed_password):
-            return None
-        return user
+            return None, "invalid_credentials"
+        if not user.is_verified:
+            return None, "not_verified"
+        if not user.is_active:
+            return None, "not_active"
+        return user, None

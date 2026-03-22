@@ -442,7 +442,11 @@
         <!-- EXPENSE LIST                                   -->
         <!-- ══════════════════════════════════════════════ -->
         <div class="content-panel animate-fade-in-up animate-delay-3">
-            <div v-if="expenses.length === 0" class="empty-state">
+            <div v-if="loading" class="empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading expenses...</p>
+            </div>
+            <div v-else-if="expenses.length === 0" class="empty-state">
                 <i class="bi bi-receipt"></i>
                 <p>
                     {{
@@ -1073,6 +1077,7 @@ const isAdmin = computed(() => {
 });
 
 // ── Data ─────────────────────────────────────────────
+const loading = ref(true);
 const expenses = ref([]);
 const categories = ref([]);
 const plantations = ref([]);
@@ -1543,6 +1548,7 @@ async function approveAll(requestId) {
 onMounted(async () => {
     document.addEventListener("click", onDocumentClick, true);
     await Promise.all([fetchExpenses(), fetchLookups(), fetchApprovals()]);
+    loading.value = false;
 });
 
 onBeforeUnmount(() => {

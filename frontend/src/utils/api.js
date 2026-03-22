@@ -1,6 +1,7 @@
 import axios from "axios";
 import router from "@/router";
 import { useAuthStore } from "@/stores/auth";
+import { useNotificationStore } from '@/stores/notification'
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
@@ -28,9 +29,21 @@ api.interceptors.request.use(
    Handle 401 globally
 --------------------------*/
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Only unwrap if response is an ApiResponse envelope (has 'data' key)
+    if (response.data?.data !== undefined) {
+      const notificationStore = useNotificationStore()
+      if (response.data.message) {
+        notificationStore.addNotification(response.data.message, response.data.type || 'success')
+      }
+      response.data = response.data.data  // unwrap envelope
+    }
+    return response
+  },
   (error) => {
-    if (error.response && error.response.status === 401) {
+    const notificationStore = useNotificationStore()
+
+    if (error.response?.status === 401) {
       const authStore = useAuthStore();
 
       authStore.logout();
@@ -39,9 +52,17 @@ api.interceptors.response.use(
       if (router.currentRoute.value.path !== "/login") {
         router.push("/login");
       }
+      return Promise.reject(error)
     }
 
-    return Promise.reject(error);
+    if (error.response) {
+      const msg = error.response.data?.detail || 'Something went wrong'
+      notificationStore.addNotification(msg, 'error')
+    } else {
+      notificationStore.addNotification('Network error', 'error')
+    }
+
+    return Promise.reject(error)
   },
 );
 

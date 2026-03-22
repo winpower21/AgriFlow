@@ -41,6 +41,8 @@ from ..models.personnel import WageType
 from ..models.settings import AppConfig
 from ..models.transformation import TransformationType
 from ..schemas.settings import (
+    AppConfigSchema,
+    AppConfigUpdate,
     BatchStageCreate,
     BatchStageUpdate,
     ExpenseCategoryCreate,
@@ -73,15 +75,53 @@ class SettingsService:
     # These are referenced by Transformation records to categorise what
     # operation was performed (e.g., cleaning, drying, grading).
 
+    def get_hectares_to_acres_rate(self) -> Optional[AppConfig]:
+        if (
+            not self.db.query(AppConfig)
+            .filter(AppConfig.key == "hectares_to_acres")
+            .first()
+        ):
+            return None
+        return (
+            self.db.query(AppConfig)
+            .filter(AppConfig.key == "hectares_to_acres")
+            .first()
+        )
+
+    def update_hectares_to_acres_rate(
+        self, data: AppConfigUpdate
+    ) -> Optional[AppConfig]:
+        obj = self.get_hectares_to_acres_rate()
+        if not obj:
+            return None
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(obj, field, value)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
+    def create_hectares_to_acres_rate(self, data: AppConfigSchema) -> AppConfig:
+        obj = AppConfigSchema(**data.model_dump())
+        self.db.add(obj)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
     def get_transformation_types(self) -> List[TransformationType]:
         """Retrieve all transformation types, ordered by ID."""
         return self.db.query(TransformationType).order_by(TransformationType.id).all()
 
     def get_transformation_type(self, type_id: int) -> Optional[TransformationType]:
         """Retrieve a specific transformation type by primary key."""
-        return self.db.query(TransformationType).filter(TransformationType.id == type_id).first()
+        return (
+            self.db.query(TransformationType)
+            .filter(TransformationType.id == type_id)
+            .first()
+        )
 
-    def create_transformation_type(self, data: TransformationTypeCreate) -> TransformationType:
+    def create_transformation_type(
+        self, data: TransformationTypeCreate
+    ) -> TransformationType:
         """Create a new transformation type from the validated schema."""
         obj = TransformationType(**data.model_dump())
         self.db.add(obj)
@@ -89,7 +129,9 @@ class SettingsService:
         self.db.refresh(obj)
         return obj
 
-    def update_transformation_type(self, type_id: int, data: TransformationTypeUpdate) -> Optional[TransformationType]:
+    def update_transformation_type(
+        self, type_id: int, data: TransformationTypeUpdate
+    ) -> Optional[TransformationType]:
         """Partially update an existing transformation type.
 
         Only fields explicitly provided in the payload are modified
@@ -134,7 +176,9 @@ class SettingsService:
         self.db.refresh(obj)
         return obj
 
-    def update_wage_type(self, type_id: int, data: WageTypeUpdate) -> Optional[WageType]:
+    def update_wage_type(
+        self, type_id: int, data: WageTypeUpdate
+    ) -> Optional[WageType]:
         """Partially update an existing wage type.
 
         Only fields explicitly provided in the payload are modified.
@@ -179,7 +223,9 @@ class SettingsService:
         self.db.refresh(obj)
         return obj
 
-    def update_batch_stage(self, stage_id: int, data: BatchStageUpdate) -> Optional[BatchStage]:
+    def update_batch_stage(
+        self, stage_id: int, data: BatchStageUpdate
+    ) -> Optional[BatchStage]:
         """Partially update an existing batch stage.
 
         Only fields explicitly provided in the payload are modified.
@@ -219,7 +265,9 @@ class SettingsService:
         submitted_ids = set(item_map.keys())
 
         # Validate all IDs exist in the database
-        existing = self.db.query(BatchStage).filter(BatchStage.id.in_(submitted_ids)).all()
+        existing = (
+            self.db.query(BatchStage).filter(BatchStage.id.in_(submitted_ids)).all()
+        )
         existing_ids = {s.id for s in existing}
         missing = submitted_ids - existing_ids
         if missing:
@@ -293,9 +341,7 @@ class SettingsService:
     def get_expense_category(self, cat_id: int) -> Optional[ExpenseCategory]:
         """Retrieve a specific expense category by primary key."""
         return (
-            self.db.query(ExpenseCategory)
-            .filter(ExpenseCategory.id == cat_id)
-            .first()
+            self.db.query(ExpenseCategory).filter(ExpenseCategory.id == cat_id).first()
         )
 
     def get_expense_category_by_name(self, name: str) -> Optional[ExpenseCategory]:
@@ -305,9 +351,7 @@ class SettingsService:
         or for matching imported data by name rather than ID.
         """
         return (
-            self.db.query(ExpenseCategory)
-            .filter(ExpenseCategory.name == name)
-            .first()
+            self.db.query(ExpenseCategory).filter(ExpenseCategory.name == name).first()
         )
 
     def create_expense_category(self, data: ExpenseCategoryCreate) -> ExpenseCategory:

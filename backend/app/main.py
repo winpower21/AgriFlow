@@ -147,6 +147,24 @@ async def lifespan(app: FastAPI):
             print("Lease Cost expense category already exists.")
     except Exception as e:
         print(f"Error seeding Lease Cost category: {e}")
+
+    # Seed default hectares-to-acres conversion rate
+    from .models.settings import AppConfig
+
+    try:
+        rate_exists = (
+            db.query(AppConfig)
+            .filter(AppConfig.key == "hectares_to_acres_rate")
+            .first()
+        )
+        if not rate_exists:
+            db.add(AppConfig(key="hectares_to_acres_rate", value="2.47105"))
+            db.commit()
+            print("Hectares-to-acres conversion rate seeded (2.47105).")
+        else:
+            print("Hectares-to-acres conversion rate already exists.")
+    except Exception as e:
+        print(f"Error seeding conversion rate: {e}")
     db.close()
     yield
 

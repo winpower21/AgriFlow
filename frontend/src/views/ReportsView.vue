@@ -691,6 +691,10 @@ watch(() => reportsStore.activeTab, () => {
         align-items: stretch;
     }
 
+    .tabs {
+        max-width: 100%;
+    }
+
     .tab-actions {
         justify-content: flex-end;
     }

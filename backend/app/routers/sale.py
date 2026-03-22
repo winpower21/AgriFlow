@@ -9,6 +9,7 @@ from ..crud.sale import SaleService
 from ..crud.user import UserService
 from ..database import get_db
 from ..models.user import User
+from ..schemas.response import ApiResponse
 from ..schemas.sale import (
     SaleCreate, SaleDetail, SaleListItem, SaleMarkPaid, SaleReject,
     SalesAnalyticsResponse,
@@ -87,21 +88,21 @@ def _to_detail(sale) -> dict:
     }
 
 
-@router.get("/stages", response_model=list[dict])
+@router.get("/stages", response_model=ApiResponse[list[dict]])
 def get_salable_stages(db: Session = Depends(get_db)):
     """List stages marked as salable."""
     stages = SaleService(db).get_salable_stages()
-    return [{"id": s.id, "name": s.name} for s in stages]
+    return ApiResponse(data=[{"id": s.id, "name": s.name} for s in stages])
 
 
-@router.get("/batches", response_model=list[dict])
+@router.get("/batches", response_model=ApiResponse[list[dict]])
 def get_salable_batches(
     stage_id: int = Query(...),
     db: Session = Depends(get_db),
 ):
     """List available batches at a salable stage for allocation."""
     batches = SaleService(db).get_salable_batches(stage_id)
-    return [
+    return ApiResponse(data=[
         {
             "id": b.id,
             "batch_code": b.batch_code,
@@ -110,10 +111,10 @@ def get_salable_batches(
             "created_at": b.created_at.isoformat(),
         }
         for b in batches
-    ]
+    ])
 
 
-@router.get("/analytics", response_model=SalesAnalyticsResponse)
+@router.get("/analytics", response_model=ApiResponse[SalesAnalyticsResponse])
 def get_analytics(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -126,17 +127,17 @@ def get_analytics(
     """Aggregated analytics for the sales dashboard."""
     is_admin = "admin" in UserService(db).get_user_roles(user_or_id=user)
     svc = SaleService(db)
-    return svc.get_analytics(
+    return ApiResponse(data=svc.get_analytics(
         date_from=date_from,
         date_to=date_to,
         stage_id=stage_id,
         customer_q=customer_q,
         status=sale_status,
         is_admin=is_admin,
-    )
+    ))
 
 
-@router.put("/{sale_id}/mark-paid", response_model=SaleDetail)
+@router.put("/{sale_id}/mark-paid", response_model=ApiResponse[SaleDetail])
 def mark_sale_paid(
     sale_id: int,
     data: SaleMarkPaid,
@@ -152,10 +153,10 @@ def mark_sale_paid(
         raise HTTPException(status_code=422, detail="Only COMPLETED sales can be marked as paid")
     if error == "already_paid":
         raise HTTPException(status_code=422, detail="Sale is already marked as paid")
-    return _to_detail(svc.get_by_id(sale_id))
+    return ApiResponse(data=_to_detail(svc.get_by_id(sale_id)), message="Sale marked as paid", type="success")
 
 
-@router.get("/", response_model=list[SaleListItem])
+@router.get("/", response_model=ApiResponse[list[SaleListItem]])
 def list_sales(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -175,20 +176,20 @@ def list_sales(
         skip=skip,
         limit=limit,
     )
-    return [_to_list_item(s) for s in sales]
+    return ApiResponse(data=[_to_list_item(s) for s in sales])
 
 
-@router.get("/{sale_id}", response_model=SaleDetail)
+@router.get("/{sale_id}", response_model=ApiResponse[SaleDetail])
 def get_sale(sale_id: int, db: Session = Depends(get_db)):
     sale = SaleService(db).get_by_id(sale_id)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
-    return _to_detail(sale)
+    return ApiResponse(data=_to_detail(sale))
 
 
 @router.post(
     "/",
-    response_model=SaleDetail,
+    response_model=ApiResponse[SaleDetail],
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(roles_required("admin"))],
 )
@@ -202,10 +203,10 @@ def create_sale(
     sale, error = svc.create_sale(data, user.id, is_admin=True)
     if error:
         raise HTTPException(status_code=422, detail=error)
-    return _to_detail(svc.get_by_id(sale.id))
+    return ApiResponse(data=_to_detail(svc.get_by_id(sale.id)), message="Sale created successfully", type="success")
 
 
-@router.post("/request", response_model=SaleDetail, status_code=status.HTTP_201_CREATED)
+@router.post("/request", response_model=ApiResponse[SaleDetail], status_code=status.HTTP_201_CREATED)
 def request_sale(
     data: SaleCreate,
     db: Session = Depends(get_db),
@@ -216,12 +217,12 @@ def request_sale(
     sale, error = svc.create_sale(data, user.id, is_admin=False)
     if error:
         raise HTTPException(status_code=422, detail=error)
-    return _to_detail(svc.get_by_id(sale.id))
+    return ApiResponse(data=_to_detail(svc.get_by_id(sale.id)), message="Sale request submitted", type="success")
 
 
 @router.put(
     "/{sale_id}/approve",
-    response_model=SaleDetail,
+    response_model=ApiResponse[SaleDetail],
     dependencies=[Depends(roles_required("admin"))],
 )
 def approve_sale(
@@ -235,12 +236,12 @@ def approve_sale(
         raise HTTPException(status_code=404, detail="Sale not found")
     if error == "not_pending":
         raise HTTPException(status_code=422, detail="Sale is not in PENDING status")
-    return _to_detail(svc.get_by_id(sale_id))
+    return ApiResponse(data=_to_detail(svc.get_by_id(sale_id)), message="Sale approved", type="success")
 
 
 @router.put(
     "/{sale_id}/reject",
-    response_model=SaleDetail,
+    response_model=ApiResponse[SaleDetail],
     dependencies=[Depends(roles_required("admin"))],
 )
 def reject_sale(
@@ -255,12 +256,12 @@ def reject_sale(
         raise HTTPException(status_code=404, detail="Sale not found")
     if error == "not_pending":
         raise HTTPException(status_code=422, detail="Sale is not in PENDING status")
-    return _to_detail(svc.get_by_id(sale_id))
+    return ApiResponse(data=_to_detail(svc.get_by_id(sale_id)), message="Sale rejected", type="success")
 
 
 @router.delete(
     "/{sale_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=ApiResponse[None],
     dependencies=[Depends(roles_required("admin"))],
 )
 def delete_sale(sale_id: int, db: Session = Depends(get_db)):
@@ -268,3 +269,4 @@ def delete_sale(sale_id: int, db: Session = Depends(get_db)):
     error = svc.delete(sale_id)
     if error == "not_found":
         raise HTTPException(status_code=404, detail="Sale not found")
+    return ApiResponse(data=None, message="Sale deleted successfully", type="success")

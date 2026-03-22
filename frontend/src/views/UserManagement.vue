@@ -159,7 +159,11 @@
                     </tbody>
                 </table>
             </div>
-            <div v-if="allUsers.length === 0" class="empty-state">
+            <div v-if="loading" class="empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading users...</p>
+            </div>
+            <div v-else-if="allUsers.length === 0" class="empty-state">
                 <i class="bi bi-people"></i>
                 <p>No users found</p>
             </div>
@@ -273,7 +277,11 @@
                     </div>
                 </div>
             </div>
-            <div v-if="allUsers.length === 0" class="empty-state">
+            <div v-if="loading" class="empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading users...</p>
+            </div>
+            <div v-else-if="allUsers.length === 0" class="empty-state">
                 <i class="bi bi-people"></i>
                 <p>No users found</p>
             </div>
@@ -399,6 +407,7 @@ import { Modal } from "bootstrap";
 import api from "../utils/api";
 
 const allUsers = ref([]);
+const loading = ref(true);
 const modalRef = ref(null);
 const modalAction = ref("");
 const modalUser = ref(null);
@@ -496,6 +505,8 @@ const getUsers = async () => {
     } catch (error) {
         console.error(error);
         return;
+    } finally {
+        loading.value = false;
     }
 };
 
@@ -536,12 +547,12 @@ const changeUserStatus = async (userId, status) => {
 
 const changeUserRole = async (userId, roleName) => {
     try {
-        const response = await request(`/users/change-role/${userId}`, "PUT", {
+        const response = await api.put(`/users/change-role/${userId}`, {
             role: roleName,
         });
         const index = allUsers.value.findIndex((user) => user.id === userId);
         if (index !== -1) {
-            allUsers.value[index] = response;
+            allUsers.value[index] = response.data;
         }
     } catch (error) {
         console.error(error);

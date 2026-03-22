@@ -114,10 +114,11 @@
                     </div>
                 </div>
             </div>
-            <div
-                v-else-if="!loading"
-                class="empty-state animate-fade-in-up animate-delay-2"
-            >
+            <div v-else-if="loading" class="empty-state animate-fade-in-up animate-delay-2">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading plantations...</p>
+            </div>
+            <div v-else class="empty-state animate-fade-in-up animate-delay-2">
                 <i class="bi bi-tree"></i>
                 <p>No active plantations</p>
             </div>
@@ -200,10 +201,11 @@
                     </div>
                 </div>
             </div>
-            <div
-                v-else-if="!loading"
-                class="empty-state animate-fade-in-up animate-delay-2"
-            >
+            <div v-else-if="loading" class="empty-state animate-fade-in-up animate-delay-2">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading plantations...</p>
+            </div>
+            <div v-else class="empty-state animate-fade-in-up animate-delay-2">
                 <i class="bi bi-tree"></i>
                 <p>No plantations yet. Add your first one.</p>
             </div>
@@ -716,7 +718,7 @@ const isAdmin = computed(() => auth.userRoles?.includes("admin"));
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 const plantations = ref([]);
-const loading = ref(false);
+const loading = ref(true);
 const haToAcRate = ref(2.47105);
 
 const activeTab = ref("active");

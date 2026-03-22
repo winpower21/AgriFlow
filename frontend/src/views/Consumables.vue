@@ -115,7 +115,11 @@
 
             <!-- Items list -->
             <div class="content-panel">
-                <div v-if="items.length === 0" class="empty-state">
+                <div v-if="loading" class="empty-state">
+                    <i class="bi bi-hourglass-split"></i>
+                    <p>Loading items...</p>
+                </div>
+                <div v-else-if="items.length === 0" class="empty-state">
                     <i class="bi bi-box-seam"></i>
                     <p>{{ filterCategoryId ? 'No items match the selected category' : 'No consumable items found' }}</p>
                 </div>
@@ -386,7 +390,11 @@
 
             <!-- Purchases list -->
             <div class="content-panel">
-                <div v-if="purchases.length === 0" class="empty-state">
+                <div v-if="loading" class="empty-state">
+                    <i class="bi bi-hourglass-split"></i>
+                    <p>Loading purchases...</p>
+                </div>
+                <div v-else-if="purchases.length === 0" class="empty-state">
                     <i class="bi bi-receipt"></i>
                     <p>No purchases found</p>
                 </div>
@@ -535,7 +543,11 @@
         <div v-if="activeTab === 'categories'" class="animate-fade-in-up animate-delay-2">
             <div class="content-panel categories-panel">
                 <!-- Empty state -->
-                <div v-if="categories.length === 0 && !isAdmin" class="empty-state">
+                <div v-if="loading" class="empty-state">
+                    <i class="bi bi-hourglass-split"></i>
+                    <p>Loading categories...</p>
+                </div>
+                <div v-else-if="categories.length === 0 && !isAdmin" class="empty-state">
                     <i class="bi bi-tags"></i>
                     <p>No categories have been created yet.</p>
                 </div>
@@ -1033,6 +1045,7 @@ const isAdmin = computed(() => {
 const activeTab = ref("items");
 
 // ── Items tab state ──────────────────────────────────
+const loading = ref(true);
 const items = ref([]);
 const searchItems = ref("");
 const itemFilterOpen = ref(false);
@@ -1602,6 +1615,7 @@ function handleClickOutside(e) {
 // ── Lifecycle ────────────────────────────────────────
 onMounted(async () => {
     await Promise.all([fetchCategories(), fetchItems(), fetchPurchases(), fetchApprovals()]);
+    loading.value = false;
     document.addEventListener('click', handleClickOutside);
 });
 

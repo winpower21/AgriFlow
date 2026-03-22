@@ -27,6 +27,7 @@ from ..schemas.reports import (
     ReportsSalesAnalyticsResponse,
     TransformationsAnalyticsResponse,
 )
+from ..schemas.response import ApiResponse
 
 router = APIRouter(
     prefix="/reports",
@@ -35,7 +36,7 @@ router = APIRouter(
 )
 
 
-@router.get("/sales/analytics", response_model=ReportsSalesAnalyticsResponse)
+@router.get("/sales/analytics", response_model=ApiResponse[ReportsSalesAnalyticsResponse])
 def get_sales_analytics(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -62,13 +63,13 @@ def get_sales_analytics(
         customer_q=customer_q,
         status=sale_status,
     )
-    return ReportsSalesAnalyticsResponse(
+    return ApiResponse(data=ReportsSalesAnalyticsResponse(
         sales_analytics=sales_data,
         **lease_impact,
-    )
+    ))
 
 
-@router.get("/batches/analytics", response_model=BatchesAnalyticsResponse)
+@router.get("/batches/analytics", response_model=ApiResponse[BatchesAnalyticsResponse])
 def get_batches_analytics(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -78,16 +79,16 @@ def get_batches_analytics(
     db: Session = Depends(get_db),
 ):
     """Batch analytics: cost trends, stage breakdown, top contributors."""
-    return ReportsService(db).get_batches_analytics(
+    return ApiResponse(data=ReportsService(db).get_batches_analytics(
         date_from=date_from,
         date_to=date_to,
         stage_id=stage_id,
         plantation_id=plantation_id,
         is_depleted=is_depleted,
-    )
+    ))
 
 
-@router.get("/transformations/analytics", response_model=TransformationsAnalyticsResponse)
+@router.get("/transformations/analytics", response_model=ApiResponse[TransformationsAnalyticsResponse])
 def get_transformations_analytics(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -96,15 +97,15 @@ def get_transformations_analytics(
     db: Session = Depends(get_db),
 ):
     """Transformation analytics: completion times, costs, resource utilization."""
-    return ReportsService(db).get_transformations_analytics(
+    return ApiResponse(data=ReportsService(db).get_transformations_analytics(
         date_from=date_from,
         date_to=date_to,
         type_id=type_id,
         status=transformation_status,
-    )
+    ))
 
 
-@router.get("/personnel/analytics", response_model=PersonnelAnalyticsResponse)
+@router.get("/personnel/analytics", response_model=ApiResponse[PersonnelAnalyticsResponse])
 def get_personnel_analytics(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -113,15 +114,15 @@ def get_personnel_analytics(
     db: Session = Depends(get_db),
 ):
     """Personnel analytics: efficiency ranking, payment trends."""
-    return ReportsService(db).get_personnel_analytics(
+    return ApiResponse(data=ReportsService(db).get_personnel_analytics(
         date_from=date_from,
         date_to=date_to,
         personnel_id=personnel_id,
         type_id=type_id,
-    )
+    ))
 
 
-@router.get("/consumables/analytics", response_model=ConsumablesAnalyticsResponse)
+@router.get("/consumables/analytics", response_model=ApiResponse[ConsumablesAnalyticsResponse])
 def get_consumables_analytics(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -130,15 +131,15 @@ def get_consumables_analytics(
     db: Session = Depends(get_db),
 ):
     """Consumables analytics: utilization, category spread, spend trends."""
-    return ReportsService(db).get_consumables_analytics(
+    return ApiResponse(data=ReportsService(db).get_consumables_analytics(
         date_from=date_from,
         date_to=date_to,
         category_id=category_id,
         consumable_id=consumable_id,
-    )
+    ))
 
 
-@router.get("/expenses/analytics", response_model=ExpensesAnalyticsResponse)
+@router.get("/expenses/analytics", response_model=ApiResponse[ExpensesAnalyticsResponse])
 def get_expenses_analytics(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -147,15 +148,15 @@ def get_expenses_analytics(
     db: Session = Depends(get_db),
 ):
     """Expense analytics: category distribution, time trends."""
-    return ReportsService(db).get_expenses_analytics(
+    return ApiResponse(data=ReportsService(db).get_expenses_analytics(
         date_from=date_from,
         date_to=date_to,
         category_id=category_id,
         plantation_id=plantation_id,
-    )
+    ))
 
 
-@router.get("/plantations/analytics", response_model=PlantationsAnalyticsResponse)
+@router.get("/plantations/analytics", response_model=ApiResponse[PlantationsAnalyticsResponse])
 def get_plantations_analytics(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
@@ -164,9 +165,9 @@ def get_plantations_analytics(
     db: Session = Depends(get_db),
 ):
     """Plantation analytics: output, lease costs, ratios."""
-    return ReportsService(db).get_plantations_analytics(
+    return ApiResponse(data=ReportsService(db).get_plantations_analytics(
         date_from=date_from,
         date_to=date_to,
         plantation_id=plantation_id,
         is_active=is_active,
-    )
+    ))

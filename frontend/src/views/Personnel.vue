@@ -117,7 +117,11 @@
                     </tbody>
                 </table>
             </div>
-            <div v-if="personnel.length === 0" class="empty-state">
+            <div v-if="loading" class="empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading personnel...</p>
+            </div>
+            <div v-else-if="personnel.length === 0" class="empty-state">
                 <i class="bi bi-people"></i>
                 <p>No personnel found</p>
             </div>
@@ -204,7 +208,11 @@
                     </div>
                 </div>
             </div>
-            <div v-if="personnel.length === 0" class="empty-state">
+            <div v-if="loading" class="empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading personnel...</p>
+            </div>
+            <div v-else-if="personnel.length === 0" class="empty-state">
                 <i class="bi bi-people"></i>
                 <p>No personnel found</p>
             </div>
@@ -436,6 +444,7 @@ const reportsStore = useReportsStore();
 
 // ── Reactive State ──────────────────────────────────
 
+const loading = ref(true);
 const personnel = ref([]);
 const wageTypes = ref([]);
 
@@ -651,6 +660,7 @@ async function deletePersonnel(id) {
 
 onMounted(async () => {
     await Promise.all([fetchPersonnel(), fetchWageTypes()]);
+    loading.value = false;
 });
 
 onBeforeUnmount(() => {

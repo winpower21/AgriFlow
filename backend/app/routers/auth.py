@@ -48,13 +48,22 @@ def login_for_access_token(
     # OAuth2PasswordRequestForm has 'username' field, but we use email for authentication.
     # The client must send the user's email in the ``username`` form field.
     user_service = UserService(db)
-    user = user_service.authenticate_user(form_data.username, form_data.password)
-    if not user:
-        # Return 401 with WWW-Authenticate header per OAuth2 spec
+    user, error = user_service.authenticate_user(form_data.username, form_data.password)
+    if error == "invalid_credentials":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    if error == "not_verified":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has not been verified yet. Please contact an administrator.",
+        )
+    if error == "not_active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is not active. Please contact an administrator.",
         )
 
     # Build a JWT whose payload is {"user": <int>} with a configurable expiry

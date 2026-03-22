@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { useNotificationStore } from '@/stores/notification'
 
 const routes = [
     {
@@ -133,5 +134,10 @@ router.beforeEach((to) => {
         }
     }
 });
+
+router.beforeEach(() => {
+  const notificationStore = useNotificationStore()
+  notificationStore.clear()
+})
 
 export default router;

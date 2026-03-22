@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import Navbar from '@/components/Navbar.vue'
 import Sidebar from '@/components/Sidebar.vue'
+import NotificationToast from '@/components/NotificationToast.vue'
 
 const route = useRoute()
 const sidebarExpanded = ref(false)
@@ -14,6 +15,7 @@ const isPublicLayout = computed(() => {
 </script>
 
 <template>
+  <NotificationToast />
   <div class="app-root">
     <!-- Public layout: Navbar + full-width content -->
     <template v-if="isPublicLayout">

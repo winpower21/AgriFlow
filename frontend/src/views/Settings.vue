@@ -207,9 +207,14 @@
                 </div>
             </TransitionGroup>
 
+            <!-- Loading State -->
+            <div v-if="loading && activeTab !== 'unitConversion'" class="empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading settings...</p>
+            </div>
             <!-- Empty State -->
             <div
-                v-if="activeTab !== 'unitConversion' && getItems(activeTab).length === 0"
+                v-else-if="activeTab !== 'unitConversion' && getItems(activeTab).length === 0"
                 class="empty-state"
             >
                 <i class="bi" :class="currentTab.icon"></i>
@@ -375,6 +380,7 @@ const isTransformationTypes = computed(() => activeTab.value === "transformation
 
 // ── Data ────────────────────────────────────────────
 
+const loading = ref(true);
 const transformationTypes = ref([]);
 const wageTypes = ref([]);
 const batchStages = ref([]);
@@ -558,6 +564,8 @@ async function fetchAll() {
         expenseCategories.value = ecRes.data;
     } catch (error) {
         console.error("Failed to fetch settings:", error);
+    } finally {
+        loading.value = false;
     }
     await fetchConversionRate();
 }

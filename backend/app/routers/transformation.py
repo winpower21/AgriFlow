@@ -9,6 +9,7 @@ from ..core.dependencies import get_current_user, roles_required
 from ..crud.consumable import ConsumableService
 from ..crud.transformation import TransformationService
 from ..database import get_db
+from ..schemas.response import ApiResponse
 from ..schemas.transformation import (
     TransformationConsumableCreate,
     TransformationCreate,
@@ -185,21 +186,21 @@ def _serialize_list(t) -> dict:
     }
 
 
-@types_router.get("/")
+@types_router.get("/", response_model=ApiResponse[list[TransformationTypeSchema]])
 def list_transformation_types(db: Session = Depends(get_db)):
-    return TransformationService(db).get_types()
+    return ApiResponse(data=TransformationService(db).get_types())
 
 
-@types_router.post("/", status_code=201, response_model=TransformationTypeSchema,
+@types_router.post("/", status_code=201, response_model=ApiResponse[TransformationTypeSchema],
                    dependencies=[Depends(roles_required("admin"))])
 def create_transformation_type(data: TransformationTypeCreate, db: Session = Depends(get_db)):
     result = TransformationService(db).create_type(data)
     if result == "root_already_exists":
         raise HTTPException(status_code=409, detail="A root transformation type already exists")
-    return result
+    return ApiResponse(data=result, message="Transformation type created", type="success")
 
 
-@types_router.put("/{type_id}", response_model=TransformationTypeSchema,
+@types_router.put("/{type_id}", response_model=ApiResponse[TransformationTypeSchema],
                   dependencies=[Depends(roles_required("admin"))])
 def update_transformation_type(type_id: int, data: TransformationTypeUpdate, db: Session = Depends(get_db)):
     result = TransformationService(db).update_type(type_id, data)
@@ -207,10 +208,10 @@ def update_transformation_type(type_id: int, data: TransformationTypeUpdate, db:
         raise HTTPException(status_code=404, detail="Transformation type not found")
     if result == "root_already_exists":
         raise HTTPException(status_code=409, detail="A root transformation type already exists")
-    return result
+    return ApiResponse(data=result, message="Transformation type updated", type="success")
 
 
-@types_router.delete("/{type_id}", status_code=204,
+@types_router.delete("/{type_id}", response_model=ApiResponse[None],
                      dependencies=[Depends(roles_required("admin"))])
 def delete_transformation_type(type_id: int, db: Session = Depends(get_db)):
     result = TransformationService(db).delete_type(type_id)
@@ -218,9 +219,10 @@ def delete_transformation_type(type_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Transformation type not found")
     if result == "in_use":
         raise HTTPException(status_code=409, detail="Cannot delete: type is used by transformations")
+    return ApiResponse(data=None, message="Transformation type deleted", type="success")
 
 
-@router.get("/", response_model=list[TransformationListItem])
+@router.get("/", response_model=ApiResponse[list[TransformationListItem]])
 def list_transformations(
     type_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
@@ -231,34 +233,34 @@ def list_transformations(
     items = TransformationService(db).get_all(
         type_id=type_id, status=status, date_from=date_from, date_to=date_to
     )
-    return [_serialize_list(t) for t in items]
+    return ApiResponse(data=[_serialize_list(t) for t in items])
 
 
-@router.post("/", status_code=201, response_model=TransformationSchema,
+@router.post("/", status_code=201, response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def create_transformation(data: TransformationCreate, db: Session = Depends(get_db)):
     t = TransformationService(db).create(data)
-    return _serialize(t)
+    return ApiResponse(data=_serialize(t), message="Transformation created successfully", type="success")
 
 
-@router.get("/{t_id}", response_model=TransformationSchema)
+@router.get("/{t_id}", response_model=ApiResponse[TransformationSchema])
 def get_transformation(t_id: int, db: Session = Depends(get_db)):
     t = TransformationService(db).get_by_id(t_id)
     if not t:
         raise HTTPException(status_code=404, detail="Transformation not found")
-    return _serialize(t)
+    return ApiResponse(data=_serialize(t))
 
 
-@router.put("/{t_id}", response_model=TransformationSchema,
+@router.put("/{t_id}", response_model=ApiResponse[TransformationSchema],
             dependencies=[Depends(roles_required("admin"))])
 def update_transformation(t_id: int, data: TransformationUpdate, db: Session = Depends(get_db)):
     t = TransformationService(db).update(t_id, data)
     if not t:
         raise HTTPException(status_code=404, detail="Transformation not found")
-    return _serialize(t)
+    return ApiResponse(data=_serialize(t), message="Transformation updated successfully", type="success")
 
 
-@router.post("/{t_id}/complete", response_model=TransformationSchema,
+@router.post("/{t_id}/complete", response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def complete_transformation(t_id: int, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -275,10 +277,10 @@ def complete_transformation(t_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Cannot complete: sum of output_weight_considered exceeds total output weight",
         )
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Transformation marked as complete", type="success")
 
 
-@router.delete("/{t_id}", status_code=204,
+@router.delete("/{t_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def delete_transformation(t_id: int, db: Session = Depends(get_db)):
     result = TransformationService(db).delete(t_id)
@@ -289,11 +291,12 @@ def delete_transformation(t_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot delete: transformation has output batches",
         )
+    return ApiResponse(data=None, message="Transformation deleted successfully", type="success")
 
 
 # ── Inputs ────────────────────────────────────────────────────────────────────
 
-@router.post("/{t_id}/inputs", status_code=201, response_model=TransformationSchema,
+@router.post("/{t_id}/inputs", status_code=201, response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def add_input(t_id: int, data: TransformationInputCreate, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -308,10 +311,10 @@ def add_input(t_id: int, data: TransformationInputCreate, db: Session = Depends(
         raise HTTPException(status_code=422, detail="input_weight exceeds batch remaining_weight_kg")
     if result == "root_no_inputs":
         raise HTTPException(status_code=422, detail="Root transformation types do not accept inputs")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Input batch added", type="success")
 
 
-@router.delete("/{t_id}/inputs/{input_id}", status_code=204,
+@router.delete("/{t_id}/inputs/{input_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def remove_input(t_id: int, input_id: int, db: Session = Depends(get_db)):
     result = TransformationService(db).remove_input(t_id, input_id)
@@ -319,11 +322,12 @@ def remove_input(t_id: int, input_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Not found")
     if result == "complete":
         raise HTTPException(status_code=409, detail="Cannot modify a completed transformation")
+    return ApiResponse(data=None, message="Input batch removed", type="success")
 
 
 # ── Outputs ───────────────────────────────────────────────────────────────────
 
-@router.post("/{t_id}/outputs", status_code=201, response_model=TransformationSchema,
+@router.post("/{t_id}/outputs", status_code=201, response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def add_output(t_id: int, data: TransformationOutputCreate, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -332,10 +336,10 @@ def add_output(t_id: int, data: TransformationOutputCreate, db: Session = Depend
         raise HTTPException(status_code=404, detail="Transformation not found")
     if result == "complete":
         raise HTTPException(status_code=409, detail="Cannot modify a completed transformation")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Output batch added", type="success")
 
 
-@router.delete("/{t_id}/outputs/{output_id}", status_code=204,
+@router.delete("/{t_id}/outputs/{output_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def remove_output(t_id: int, output_id: int, db: Session = Depends(get_db)):
     result = TransformationService(db).remove_output(t_id, output_id)
@@ -343,11 +347,12 @@ def remove_output(t_id: int, output_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Not found")
     if result == "complete":
         raise HTTPException(status_code=409, detail="Cannot modify a completed transformation")
+    return ApiResponse(data=None, message="Output batch removed", type="success")
 
 
 # ── Personnel ─────────────────────────────────────────────────────────────────
 
-@router.post("/{t_id}/personnel", status_code=201, response_model=TransformationSchema,
+@router.post("/{t_id}/personnel", status_code=201, response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def assign_personnel(t_id: int, data: TransformationPersonnelCreate, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -360,10 +365,10 @@ def assign_personnel(t_id: int, data: TransformationPersonnelCreate, db: Session
         raise HTTPException(status_code=422, detail="PER_KG wage type requires output_weight_considered")
     if result == "output_weight_exceeded":
         raise HTTPException(status_code=422, detail="output_weight_considered exceeds remaining assignable output quantity")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Personnel assigned", type="success")
 
 
-@router.put("/{t_id}/personnel/{tp_id}", response_model=TransformationSchema,
+@router.put("/{t_id}/personnel/{tp_id}", response_model=ApiResponse[TransformationSchema],
             dependencies=[Depends(roles_required("admin"))])
 def update_personnel(t_id: int, tp_id: int, data: TransformationPersonnelUpdate,
                      db: Session = Depends(get_db)):
@@ -371,18 +376,19 @@ def update_personnel(t_id: int, tp_id: int, data: TransformationPersonnelUpdate,
     result = svc.update_personnel(t_id, tp_id, data)
     if result == "not_found":
         raise HTTPException(status_code=404, detail="Assignment not found")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Personnel assignment updated", type="success")
 
 
-@router.delete("/{t_id}/personnel/{tp_id}", status_code=204,
+@router.delete("/{t_id}/personnel/{tp_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def remove_personnel(t_id: int, tp_id: int, db: Session = Depends(get_db)):
     result = TransformationService(db).remove_personnel(t_id, tp_id)
     if result == "not_found":
         raise HTTPException(status_code=404, detail="Assignment not found")
+    return ApiResponse(data=None, message="Personnel removed", type="success")
 
 
-@router.post("/{t_id}/personnel/{tp_id}/mark-paid", response_model=TransformationSchema,
+@router.post("/{t_id}/personnel/{tp_id}/mark-paid", response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def mark_personnel_paid(t_id: int, tp_id: int, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -393,10 +399,10 @@ def mark_personnel_paid(t_id: int, tp_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="Already marked as paid")
     if result == "labour_category_missing":
         raise HTTPException(status_code=500, detail="Labour expense category not found")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Personnel marked as paid", type="success")
 
 
-@router.post("/{t_id}/personnel/{tp_id}/mark-unpaid", response_model=TransformationSchema,
+@router.post("/{t_id}/personnel/{tp_id}/mark-unpaid", response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def mark_personnel_unpaid(t_id: int, tp_id: int, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -405,12 +411,12 @@ def mark_personnel_unpaid(t_id: int, tp_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Assignment not found")
     if result == "not_paid":
         raise HTTPException(status_code=409, detail="Not currently marked as paid")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Personnel marked as unpaid", type="success")
 
 
 # ── Vehicles ──────────────────────────────────────────────────────────────────
 
-@router.post("/{t_id}/vehicles", status_code=201, response_model=TransformationSchema,
+@router.post("/{t_id}/vehicles", status_code=201, response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def assign_vehicle(t_id: int, data: TransformationVehicleCreate, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -423,10 +429,10 @@ def assign_vehicle(t_id: int, data: TransformationVehicleCreate, db: Session = D
         raise HTTPException(status_code=422, detail="Insufficient fuel stock to fulfill this vehicle assignment")
     if result == "consumable_not_found":
         raise HTTPException(status_code=404, detail="Fuel consumable not found")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Vehicle assigned", type="success")
 
 
-@router.put("/{t_id}/vehicles/{tv_id}", response_model=TransformationSchema,
+@router.put("/{t_id}/vehicles/{tv_id}", response_model=ApiResponse[TransformationSchema],
             dependencies=[Depends(roles_required("admin"))])
 def update_vehicle(t_id: int, tv_id: int, data: TransformationVehicleUpdate,
                    db: Session = Depends(get_db)):
@@ -434,20 +440,21 @@ def update_vehicle(t_id: int, tv_id: int, data: TransformationVehicleUpdate,
     result = svc.update_vehicle(t_id, tv_id, data)
     if result == "not_found":
         raise HTTPException(status_code=404, detail="Vehicle assignment not found")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Vehicle assignment updated", type="success")
 
 
-@router.delete("/{t_id}/vehicles/{tv_id}", status_code=204,
+@router.delete("/{t_id}/vehicles/{tv_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def remove_vehicle(t_id: int, tv_id: int, db: Session = Depends(get_db)):
     result = TransformationService(db).remove_vehicle(t_id, tv_id)
     if result == "not_found":
         raise HTTPException(status_code=404, detail="Vehicle assignment not found")
+    return ApiResponse(data=None, message="Vehicle removed", type="success")
 
 
 # ── Consumables ───────────────────────────────────────────────────────────────
 
-@router.post("/{t_id}/consumables", status_code=201, response_model=TransformationSchema,
+@router.post("/{t_id}/consumables", status_code=201, response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def add_consumable(t_id: int, data: TransformationConsumableCreate, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -458,20 +465,21 @@ def add_consumable(t_id: int, data: TransformationConsumableCreate, db: Session 
         raise HTTPException(status_code=404, detail="Consumable not found")
     if result == "insufficient_stock":
         raise HTTPException(status_code=422, detail="Insufficient stock to fulfill this consumption")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Consumable added", type="success")
 
 
-@router.delete("/{t_id}/consumables/{tc_id}", status_code=204,
+@router.delete("/{t_id}/consumables/{tc_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def remove_consumable(t_id: int, tc_id: int, db: Session = Depends(get_db)):
     result = TransformationService(db).remove_consumable(t_id, tc_id)
     if result == "not_found":
         raise HTTPException(status_code=404, detail="Consumable usage not found")
+    return ApiResponse(data=None, message="Consumable removed", type="success")
 
 
 # ── Expenses ─────────────────────────────────────────────────────────────────
 
-@router.post("/{t_id}/expenses", status_code=201, response_model=TransformationSchema,
+@router.post("/{t_id}/expenses", status_code=201, response_model=ApiResponse[TransformationSchema],
              dependencies=[Depends(roles_required("admin"))])
 def add_expense(t_id: int, data: TransformationExpenseCreate, db: Session = Depends(get_db)):
     svc = TransformationService(db)
@@ -480,10 +488,10 @@ def add_expense(t_id: int, data: TransformationExpenseCreate, db: Session = Depe
         raise HTTPException(status_code=404, detail="Transformation not found")
     if result == "category_not_found":
         raise HTTPException(status_code=404, detail="Expense category not found")
-    return _serialize(svc.get_by_id(t_id))
+    return ApiResponse(data=_serialize(svc.get_by_id(t_id)), message="Expense added", type="success")
 
 
-@router.delete("/{t_id}/expenses/{expense_id}", status_code=204,
+@router.delete("/{t_id}/expenses/{expense_id}", response_model=ApiResponse[None],
                dependencies=[Depends(roles_required("admin"))])
 def remove_expense(t_id: int, expense_id: int, db: Session = Depends(get_db)):
     result = TransformationService(db).remove_expense(t_id, expense_id)
@@ -492,3 +500,4 @@ def remove_expense(t_id: int, expense_id: int, db: Session = Depends(get_db)):
     if result == "wage_expense_protected":
         raise HTTPException(status_code=409,
                             detail="Cannot delete wage expense directly. Use mark-unpaid instead.")
+    return ApiResponse(data=None, message="Expense removed", type="success")

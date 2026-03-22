@@ -7,6 +7,7 @@ from ..core.dependencies import get_current_user
 from ..crud.dashboard import DashboardService
 from ..database import get_db
 from ..schemas.dashboard import DailyOutputItem, DashboardSummary, RecentActivityItem, YieldTrendItem
+from ..schemas.response import ApiResponse
 
 router = APIRouter(
     prefix="/dashboard",
@@ -15,21 +16,21 @@ router = APIRouter(
 )
 
 
-@router.get("/summary", response_model=DashboardSummary)
+@router.get("/summary", response_model=ApiResponse[DashboardSummary])
 def get_summary(db: Session = Depends(get_db)):
-    return DashboardService(db).get_summary()
+    return ApiResponse(data=DashboardService(db).get_summary())
 
 
-@router.get("/yield-trend", response_model=list[YieldTrendItem])
+@router.get("/yield-trend", response_model=ApiResponse[list[YieldTrendItem]])
 def get_yield_trend(weeks: int = Query(8, ge=1, le=52), db: Session = Depends(get_db)):
-    return DashboardService(db).get_yield_trend(weeks=weeks)
+    return ApiResponse(data=DashboardService(db).get_yield_trend(weeks=weeks))
 
 
-@router.get("/recent-activity", response_model=list[RecentActivityItem])
+@router.get("/recent-activity", response_model=ApiResponse[list[RecentActivityItem]])
 def get_recent_activity(db: Session = Depends(get_db)):
-    return DashboardService(db).get_recent_activity()
+    return ApiResponse(data=DashboardService(db).get_recent_activity())
 
 
-@router.get("/daily-output", response_model=list[DailyOutputItem])
+@router.get("/daily-output", response_model=ApiResponse[list[DailyOutputItem]])
 def get_daily_output(end_date: date = Query(None), db: Session = Depends(get_db)):
-    return DashboardService(db).get_daily_output(end_date=end_date)
+    return ApiResponse(data=DashboardService(db).get_daily_output(end_date=end_date))

@@ -28,6 +28,7 @@ from ..crud.plantation import PlantationService
 from ..database import get_db
 from ..models.location import Location
 from ..schemas.location import LocationDetailSchema
+from ..schemas.response import ApiResponse
 from ..schemas.weather import WeatherSchema
 
 router = APIRouter(
@@ -37,7 +38,7 @@ router = APIRouter(
 )
 
 
-@router.get("/search-locations")
+@router.get("/search-locations", response_model=ApiResponse[dict])
 async def search_locations(
     query: str = Query(..., min_length=2, description="Location search text"),
 ):
@@ -45,34 +46,34 @@ async def search_locations(
     Proxy to Google Places Autocomplete filtered to geographic regions.
     Returns city/district/state suggestions — no businesses or buildings.
     """
-    return {"predictions": await search_places(query)}
+    return ApiResponse(data={"predictions": await search_places(query)})
 
 
-@router.get("/place-details")
+@router.get("/place-details", response_model=ApiResponse[dict])
 async def place_details(
     place_id: str = Query(..., description="Google Place ID"),
 ):
     """Fetch lat/lng and formatted address for a Google Place ID."""
-    return await get_place_details(place_id)
+    return ApiResponse(data=await get_place_details(place_id))
 
 
-@router.get("/current")
+@router.get("/current", response_model=ApiResponse[dict])
 async def current_conditions(
     lat: float = Query(..., description="Latitude"),
     lng: float = Query(..., description="Longitude"),
 ):
     """Current weather conditions for a lat/lng pair."""
-    return await get_current_weather(lat, lng)
+    return ApiResponse(data=await get_current_weather(lat, lng))
 
 
-@router.get("/forecast")
+@router.get("/forecast", response_model=ApiResponse[dict])
 async def hourly_forecast(
     lat: float = Query(..., description="Latitude"),
     lng: float = Query(..., description="Longitude"),
     hours: int = Query(24, ge=1, le=240, description="Forecast hours"),
 ):
     """Hourly weather forecast for a lat/lng pair."""
-    return await get_hourly_forecast(lat, lng, hours)
+    return ApiResponse(data=await get_hourly_forecast(lat, lng, hours))
 
 
 # ── Location-centric weather endpoints ───────────────────────────────────────
@@ -85,18 +86,18 @@ location_weather_router = APIRouter(
 )
 
 
-@location_weather_router.get("/locations", response_model=list[LocationDetailSchema])
+@location_weather_router.get("/locations", response_model=ApiResponse[list[LocationDetailSchema]])
 def list_weather_locations(db: Session = Depends(get_db)):
     """Return all location rows for the WeatherView saved-locations list.
 
     Returns every row in the locations table, ordered by city name.
     Includes plantation-linked locations — the WeatherView shows all of them.
     """
-    return db.query(Location).order_by(Location.city).all()
+    return ApiResponse(data=db.query(Location).order_by(Location.city).all())
 
 
 @location_weather_router.get(
-    "/by-location/{location_id}", response_model=WeatherSchema
+    "/by-location/{location_id}", response_model=ApiResponse[WeatherSchema]
 )
 async def get_weather_by_location(
     location_id: int, db: Session = Depends(get_db)
@@ -116,18 +117,18 @@ async def get_weather_by_location(
     service = PlantationService(db)
     cached = service.get_cached_weather(location_id)
     if cached:
-        return cached
+        return ApiResponse(data=cached)
 
     # Cache miss — fetch from Google and persist
     current = await get_current_weather(loc.latitude, loc.longitude)
     hourly = await get_hourly_forecast(loc.latitude, loc.longitude, hours=24)
     raw = {"current": current, "hourly": hourly}
-    return service.save_weather(location_id, raw, is_manual=False)
+    return ApiResponse(data=service.save_weather(location_id, raw, is_manual=False))
 
 
 @location_weather_router.post(
     "/by-location/{location_id}/refresh",
-    response_model=WeatherSchema,
+    response_model=ApiResponse[WeatherSchema],
     status_code=201,
 )
 async def refresh_weather_by_location(
@@ -146,4 +147,8 @@ async def refresh_weather_by_location(
     current = await get_current_weather(loc.latitude, loc.longitude)
     hourly = await get_hourly_forecast(loc.latitude, loc.longitude, hours=24)
     raw = {"current": current, "hourly": hourly}
-    return service.save_weather(location_id, raw, is_manual=True)
+    return ApiResponse(
+        data=service.save_weather(location_id, raw, is_manual=True),
+        message="Weather data refreshed",
+        type="success",
+    )

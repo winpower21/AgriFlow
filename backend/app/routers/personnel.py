@@ -43,6 +43,7 @@ from ..schemas.personnel import (
     PersonnelSchema,
     WageTypeSchema,
 )
+from ..schemas.response import ApiResponse
 
 # Auth: ``get_current_user`` is a router-level dependency — every endpoint
 # underneath requires a valid JWT bearer token.  No role restriction.
@@ -78,21 +79,21 @@ def delete_photo(relative_path: str | None) -> None:
     path.unlink(missing_ok=True)
 
 
-@router.get("/", response_model=list[PersonnelSchema])
+@router.get("/", response_model=ApiResponse[list[PersonnelSchema]])
 def get_all_personnel(db: Session = Depends(get_db)):
     """Get all personnel records. Auth: any authenticated user."""
     service = PersonnelService(db)
-    return service.get_all()
+    return ApiResponse(data=service.get_all())
 
 
-@router.get("/wage-types", response_model=list[WageTypeSchema])
+@router.get("/wage-types", response_model=ApiResponse[list[WageTypeSchema]])
 def get_wage_types(db: Session = Depends(get_db)):
     """Get all wage types (convenience duplicate of settings/wage-types). Auth: any authenticated user."""
     service = PersonnelService(db)
-    return service.get_wage_types()
+    return ApiResponse(data=service.get_wage_types())
 
 
-@router.get("/{personnel_id}", response_model=PersonnelSchema)
+@router.get("/{personnel_id}", response_model=ApiResponse[PersonnelSchema])
 def get_personnel(personnel_id: int, db: Session = Depends(get_db)):
     """Get a single personnel record by ID. Returns 404 if not found. Auth: any authenticated user."""
     service = PersonnelService(db)
@@ -101,10 +102,10 @@ def get_personnel(personnel_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Personnel not found"
         )
-    return person
+    return ApiResponse(data=person)
 
 
-@router.post("/", response_model=PersonnelSchema, status_code=201)
+@router.post("/", response_model=ApiResponse[PersonnelSchema], status_code=201)
 def create_personnel(
     name: str = Form(...),
     wage_type_id: int = Form(...),
@@ -117,17 +118,21 @@ def create_personnel(
     """Create a new personnel record. Accepts multipart/form-data."""
     photo_path = save_photo(photo) if photo and photo.filename else None
     service = PersonnelService(db)
-    return service.create(
-        name=name,
-        wage_type_id=wage_type_id,
-        current_rate=current_rate,
-        phone=phone,
-        address=address,
-        photo=photo_path,
+    return ApiResponse(
+        data=service.create(
+            name=name,
+            wage_type_id=wage_type_id,
+            current_rate=current_rate,
+            phone=phone,
+            address=address,
+            photo=photo_path,
+        ),
+        message="Personnel added successfully",
+        type="success",
     )
 
 
-@router.put("/{personnel_id}", response_model=PersonnelSchema)
+@router.put("/{personnel_id}", response_model=ApiResponse[PersonnelSchema])
 def update_personnel(
     personnel_id: int,
     name: str | None = Form(None),
@@ -150,24 +155,29 @@ def update_personnel(
         delete_photo(person.photo)           # remove old file from disk
         new_photo_path = save_photo(photo)
 
-    return service.update(
-        personnel_id=personnel_id,
-        name=name,
-        wage_type_id=wage_type_id,
-        current_rate=current_rate,
-        phone=phone,
-        address=address,
-        is_active=is_active,
-        photo=new_photo_path,
+    return ApiResponse(
+        data=service.update(
+            personnel_id=personnel_id,
+            name=name,
+            wage_type_id=wage_type_id,
+            current_rate=current_rate,
+            phone=phone,
+            address=address,
+            is_active=is_active,
+            photo=new_photo_path,
+        ),
+        message="Personnel updated successfully",
+        type="success",
     )
 
 
-@router.delete("/{personnel_id}", status_code=204)
+@router.delete("/{personnel_id}", response_model=ApiResponse[None])
 def delete_personnel(personnel_id: int, db: Session = Depends(get_db)):
-    """Delete a personnel record. Returns 204 No Content on success, 404 if not found. Auth: any authenticated user."""
+    """Delete a personnel record. Returns 200 with ApiResponse on success, 404 if not found. Auth: any authenticated user."""
     service = PersonnelService(db)
     deleted = service.delete(personnel_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Personnel not found"
         )
+    return ApiResponse(data=None, message="Personnel deleted successfully", type="success")

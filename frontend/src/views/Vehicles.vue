@@ -29,7 +29,11 @@
         </div>
 
         <div class="content-panel animate-fade-in-up animate-delay-2">
-            <div v-if="vehicles.length === 0" class="empty-state">
+            <div v-if="loading" class="empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p>Loading vehicles...</p>
+            </div>
+            <div v-else-if="vehicles.length === 0" class="empty-state">
                 <i class="bi bi-truck"></i>
                 <p>No vehicles found</p>
             </div>
@@ -112,6 +116,7 @@ const auth = useAuthStore();
 const isAdmin = auth.userRoles?.includes("admin");
 
 const vehicles = ref([]);
+const loading = ref(true);
 const searchQuery = ref("");
 const activeOnly = ref(false);
 const saving = ref(false);
@@ -132,6 +137,8 @@ async function fetchVehicles() {
         vehicles.value = res.data;
     } catch (err) {
         console.error("Failed to fetch vehicles:", err);
+    } finally {
+        loading.value = false;
     }
 }
 

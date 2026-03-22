@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import List
 
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from ..models.batch import Batch, BatchStage
 from ..models.transformation import Transformation, TransformationOutput
@@ -22,6 +22,7 @@ class DashboardService:
         self.db = db
 
     def get_summary(self) -> DashboardSummary:
+        ParentStage = aliased(BatchStage)
         stage_rows = (
             self.db.query(
                 BatchStage.id,
@@ -33,9 +34,18 @@ class DashboardService:
                     "total_remaining_kg"
                 ),
             )
+            .outerjoin(ParentStage, BatchStage.parent_id == ParentStage.id)
             .outerjoin(Batch, Batch.stage_id == BatchStage.id)
-            .group_by(BatchStage.id, BatchStage.name, BatchStage.icon, BatchStage.color)
-            .order_by(BatchStage.sort_order)
+            .group_by(
+                BatchStage.id, BatchStage.name, BatchStage.icon, BatchStage.color,
+                BatchStage.sort_order, BatchStage.batch_stage_level,
+                ParentStage.sort_order,
+            )
+            .order_by(
+                func.coalesce(ParentStage.sort_order, BatchStage.sort_order),
+                BatchStage.batch_stage_level,
+                BatchStage.sort_order,
+            )
             .all()
         )
 

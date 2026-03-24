@@ -23,7 +23,9 @@ const dailyOutput = ref([]);
 const recentActivity = ref([]);
 const activeTransformations = ref([]);
 const loading = ref(true);
+const chartLoading = ref(false);
 const error = ref(null);
+const pendingSalaries = ref([]);
 
 
 function toLocalDateStr(d) {
@@ -55,7 +57,10 @@ function shiftDate(days) {
     weeksBack.value = Math.max(0, newWeeks);
 }
 
+let chartFetchTimer = null;
+
 async function loadDailyOutput() {
+    chartLoading.value = true;
     try {
         const res = await api.get(
             `/dashboard/daily-output?end_date=${chartEndDate.value}`,
@@ -63,25 +68,35 @@ async function loadDailyOutput() {
         dailyOutput.value = res.data;
     } catch (e) {
         // silently fail for chart reload
+    } finally {
+        chartLoading.value = false;
     }
+}
+
+function debouncedLoadDailyOutput() {
+    chartLoading.value = true;
+    clearTimeout(chartFetchTimer);
+    chartFetchTimer = setTimeout(() => loadDailyOutput(), 200);
 }
 
 async function loadAll() {
     loading.value = true;
     error.value = null;
     try {
-        const [sumRes, dailyRes, actRes, txRes] = await Promise.all([
+        const [sumRes, dailyRes, actRes, txRes, salRes] = await Promise.all([
             api.get("/dashboard/summary"),
             api.get(
                 `/dashboard/daily-output?end_date=${chartEndDate.value}`,
             ),
             api.get("/dashboard/recent-activity"),
             api.get("/transformations/?status=in_progress"),
+            api.get("/personnel/pending-salaries"),
         ]);
         summary.value = sumRes.data;
         dailyOutput.value = dailyRes.data;
         recentActivity.value = actRes.data;
         activeTransformations.value = txRes.data;
+        pendingSalaries.value = salRes.data;
     } catch (e) {
         error.value = "Failed to load dashboard data.";
     } finally {
@@ -92,7 +107,7 @@ async function loadAll() {
 onMounted(loadAll);
 
 watch(chartEndDate, () => {
-    loadDailyOutput();
+    debouncedLoadDailyOutput();
 });
 
 const stageSummaries = computed(() => {
@@ -235,7 +250,7 @@ const chartOptions = computed(() => ({
 function formatKg(kg) {
     const n = Number(kg);
     if (kg == null || isNaN(n)) return "—";
-    if (n >= 1000) return (n / 1000).toFixed(1) + " t";
+    if (n >= 1000) return (n / 1000).toFixed(2) + " t";
     return n.toFixed(1) + " kg";
 }
 
@@ -278,6 +293,16 @@ function goToTransformation(id) {
 function newTransformation() {
     router.push({ name: "transformations", query: { new: "true" } });
 }
+
+async function paySalaryFromDashboard(ps) {
+    if (!confirm(`Pay monthly salary of ₹${ps.salary_amount} to ${ps.personnel_name}?`)) return
+    try {
+        await api.post(`/personnel/${ps.personnel_id}/pay-salary`)
+        pendingSalaries.value = pendingSalaries.value.filter(p => p.personnel_id !== ps.personnel_id)
+    } catch (e) {
+        alert(e.response?.data?.detail || 'Failed to pay salary')
+    }
+}
 </script>
 
 <template>
@@ -296,6 +321,26 @@ function newTransformation() {
                 <i class="bi bi-plus-lg"></i>
                 <span>New Transformation</span>
             </button>
+        </div>
+
+        <!-- PENDING SALARIES -->
+        <div v-if="!loading && pendingSalaries.length" class="content-panel animate-fade-in-up animate-delay-1" style="margin-bottom: 16px; border-left: 3px solid #e74c3c;">
+            <div class="panel-header">
+                <span><i class="bi bi-exclamation-circle" style="color: #e74c3c;"></i> Pending Salary Payments</span>
+            </div>
+            <div class="panel-body">
+                <div v-for="ps in pendingSalaries" :key="ps.personnel_id" class="resource-row">
+                    <div class="resource-main">
+                        <span class="resource-name">{{ ps.personnel_name }}</span>
+                        <span class="resource-sub">₹{{ ps.salary_amount.toLocaleString() }} · Due {{ ps.payment_due_date }} ({{ ps.days_until_due <= 0 ? 'Today' : ps.days_until_due + ' days' }})</span>
+                    </div>
+                    <div class="resource-meta">
+                        <button class="btn-icon-edit" @click="paySalaryFromDashboard(ps)" title="Pay Salary">
+                            <i class="bi bi-cash-coin"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- ERROR -->
@@ -323,7 +368,7 @@ function newTransformation() {
                 >
                     <i class="bi" :class="stage.icon + ' stage-icon'"></i>
                     <div class="stage-label">{{ stage.label }}</div>
-                    <div class="stage-count">{{ stage.count }}</div>
+                    <div class="stage-count">{{ stage.count }}<span class="stage-count-label"> batches</span></div>
                     <div class="stage-kg">{{ formatKg(stage.total_kg) }}</div>
                 </div>
             </div>
@@ -363,7 +408,14 @@ function newTransformation() {
                     </div>
                     <div class="panel-body">
                         <div
-                            v-if="!hasOutputData"
+                            v-if="chartLoading"
+                            class="empty-state small-empty"
+                        >
+                            <i class="bi bi-arrow-repeat spinning"></i>
+                            <p>Loading output data...</p>
+                        </div>
+                        <div
+                            v-else-if="!hasOutputData"
                             class="empty-state small-empty"
                         >
                             <i class="bi bi-bar-chart"></i>
@@ -694,6 +746,9 @@ function newTransformation() {
     opacity: 0.9;
     text-transform: uppercase;
     letter-spacing: 0.04em;
+}
+.stage-count-label {
+    display: none;
 }
 .stage-count {
     font-size: 1.5rem;
@@ -1057,6 +1112,56 @@ function newTransformation() {
     margin-top: 0.15rem;
 }
 
+/* -- Resource rows (pending salaries) -- */
+.resource-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-light, #e5e7eb);
+}
+.resource-row:last-child {
+    border-bottom: none;
+}
+.resource-main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+.resource-name {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+}
+.resource-sub {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+.resource-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.btn-icon-edit {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    border: 1px solid var(--border-light, #e5e7eb);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    transition: all 0.15s;
+}
+.btn-icon-edit:hover {
+    border-color: var(--moss);
+    color: var(--moss);
+    background: rgba(74, 103, 65, 0.06);
+}
+
 /* -- Empty state -- */
 .empty-state {
     text-align: center;
@@ -1177,11 +1282,53 @@ function newTransformation() {
 }
 
 @media (max-width: 479.98px) {
+    .stage-bar {
+        grid-template-columns: 1fr 1fr;
+    }
+    .stage-tile {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        grid-template-rows: auto auto;
+        padding: 0.45rem 0.6rem;
+        gap: 0.1rem 0.35rem;
+        text-align: left;
+        align-items: center;
+    }
+    .stage-tile .stage-icon {
+        font-size: 1rem;
+        grid-row: 1;
+        grid-column: 1;
+    }
     .stage-label {
-        display: none;
+        grid-row: 1;
+        grid-column: 2 / -1;
+        font-size: 0.68rem;
+    }
+    .stage-count {
+        grid-row: 2;
+        grid-column: 1 / 2;
+        font-size: 0.78rem;
+        font-weight: 600;
+    }
+    .stage-count-label {
+        display: inline;
+        font-size: 0.65rem;
+        font-weight: 400;
+        opacity: 0.75;
     }
     .stage-kg {
-        display: none;
+        grid-row: 2;
+        grid-column: 2 / -1;
+        font-size: 0.68rem;
+        text-align: right;
     }
+}
+
+.spinning {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 </style>

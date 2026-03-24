@@ -58,7 +58,7 @@ const icons = {
 
 .toast-success {
   border-left-color: var(--moss, #4A6741);
-  background: rgba(74, 103, 65, 0.08);
+  background: #e8f0e5;
 }
 .toast-success .bi {
   color: var(--moss, #4A6741);
@@ -66,7 +66,7 @@ const icons = {
 
 .toast-error {
   border-left-color: var(--sienna, #B5694D);
-  background: rgba(181, 105, 77, 0.08);
+  background: #f0ddd6;
 }
 .toast-error .bi {
   color: var(--sienna, #B5694D);
@@ -74,7 +74,7 @@ const icons = {
 
 .toast-warning {
   border-left-color: var(--harvest, #C4A35A);
-  background: rgba(196, 163, 90, 0.08);
+  background: #f0ebd2;
 }
 .toast-warning .bi {
   color: var(--harvest, #C4A35A);
@@ -82,7 +82,7 @@ const icons = {
 
 .toast-info {
   border-left-color: var(--sage, #8A9A7B);
-  background: rgba(138, 154, 123, 0.08);
+  background: #e5ebe0;
 }
 .toast-info .bi {
   color: var(--sage, #8A9A7B);

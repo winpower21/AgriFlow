@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 class VehicleCreate(BaseModel):
     number: str
     vehicle_type: Optional[str] = None
-    fuel_consumable_id: Optional[int] = None
+    fuel_consumable_id: int
 
 
 class VehicleUpdate(BaseModel):
@@ -20,7 +20,7 @@ class VehicleSchema(BaseModel):
     id: int
     number: str
     vehicle_type: Optional[str] = None
-    fuel_consumable_id: Optional[int] = None
+    fuel_consumable_id: int
     fuel_consumable_name: Optional[str] = None
     is_active: bool
     created_at: datetime

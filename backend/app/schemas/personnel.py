@@ -18,12 +18,14 @@ class WageTypeSchema(BaseModel):
     """Lightweight read-only schema for wage type data embedded in personnel responses.
 
     Fields:
-        id:   Primary key of the wage type.
-        name: Label of the wage type (e.g. 'Daily', 'Piece-rate', 'Monthly').
+        id:                 Primary key of the wage type.
+        name:               Label of the wage type (e.g. 'Daily', 'Piece-rate', 'Monthly').
+        calculation_method: How wages are calculated (e.g. 'DAILY', 'PER_KG', 'MONTHLY').
     """
 
     id: int
     name: str
+    calculation_method: str = "DAILY"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -45,6 +47,7 @@ class PersonnelBase(BaseModel):
     current_rate: Decimal
     phone: Optional[str] = None
     address: Optional[str] = None
+    salary_payment_date: Optional[int] = None
 
 
 class PersonnelCreate(PersonnelBase):
@@ -70,6 +73,7 @@ class PersonnelUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     is_active: Optional[bool] = None
+    salary_payment_date: Optional[int] = None
 
 
 class PersonnelSchema(PersonnelBase):

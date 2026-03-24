@@ -1,3 +1,4 @@
+import decimal
 import json
 from datetime import datetime
 from typing import List, Optional
@@ -39,7 +40,7 @@ class ApprovalService:
             type=data.type,
             status="PENDING",
             requested_by_id=user_id,
-            payload=json.dumps(items),
+            payload=json.dumps(items, default=lambda o: str(o) if isinstance(o, decimal.Decimal) else None),
             notes=data.notes,
         )
         self.db.add(obj)
@@ -73,7 +74,7 @@ class ApprovalService:
             item["status"] = "rejected"
             item["rejection_note"] = action_data.rejection_note
 
-        req.payload = json.dumps(items)
+        req.payload = json.dumps(items, default=lambda o: str(o) if isinstance(o, decimal.Decimal) else None)
         req.reviewed_by_id = admin_id
         req.reviewed_at = datetime.utcnow()
         req.status = self._compute_status(items)
@@ -89,7 +90,7 @@ class ApprovalService:
             if item["status"] == "pending":
                 item["status"] = "approved"
                 self._execute_approved_item(req.type, item["data"])
-        req.payload = json.dumps(items)
+        req.payload = json.dumps(items, default=lambda o: str(o) if isinstance(o, decimal.Decimal) else None)
         req.reviewed_by_id = admin_id
         req.reviewed_at = datetime.utcnow()
         req.status = "RESOLVED"
@@ -106,12 +107,45 @@ class ApprovalService:
                 item["status"] = "rejected"
                 if note:
                     item["rejection_note"] = note
-        req.payload = json.dumps(items)
+        req.payload = json.dumps(items, default=lambda o: str(o) if isinstance(o, decimal.Decimal) else None)
         req.reviewed_by_id = admin_id
         req.reviewed_at = datetime.utcnow()
         req.status = "RESOLVED"
         self.db.commit()
         return self._q().filter(ApprovalRequest.id == request_id).first()
+
+    def update(self, request_id: int, user_id: int, data) -> Optional[ApprovalRequest]:
+        """Manager edits their own pending request."""
+        req = self.db.query(ApprovalRequest).filter(ApprovalRequest.id == request_id).first()
+        if not req:
+            return None
+        if req.requested_by_id != user_id:
+            raise ValueError("not_owner")
+        if req.status != "PENDING":
+            raise ValueError("not_pending")
+
+        items = [item.model_dump() for item in data.items]
+        for i, item in enumerate(items):
+            item["index"] = i
+            item["status"] = "pending"
+        req.payload = json.dumps(items, default=lambda o: str(o) if isinstance(o, decimal.Decimal) else None)
+        if data.notes is not None:
+            req.notes = data.notes
+        self.db.commit()
+        return self._q().filter(ApprovalRequest.id == request_id).first()
+
+    def delete(self, request_id: int, user_id: int) -> Optional[str]:
+        """Manager deletes their own pending request. Returns error string or None."""
+        req = self.db.query(ApprovalRequest).filter(ApprovalRequest.id == request_id).first()
+        if not req:
+            return "not_found"
+        if req.requested_by_id != user_id:
+            return "not_owner"
+        if req.status != "PENDING":
+            return "not_pending"
+        self.db.delete(req)
+        self.db.commit()
+        return None
 
     def _compute_status(self, items: list) -> str:
         statuses = {i["status"] for i in items}
@@ -123,12 +157,76 @@ class ApprovalService:
 
     def _execute_approved_item(self, req_type: str, data: dict):
         if req_type == "EXPENSE":
-            # data dict keys must match ExpenseCreate fields
             expense_data = ExpenseCreate(**data)
             ExpenseService(self.db).create(expense_data)
         elif req_type == "CONSUMABLE_PURCHASE":
-            # data must have consumable_id plus ConsumablePurchaseCreate fields
-            data = dict(data)  # make a copy
+            data = dict(data)
             consumable_id = data.pop("consumable_id")
             purchase_data = ConsumablePurchaseCreate(**data)
             ConsumableService(self.db).add_purchase(consumable_id, purchase_data)
+        elif req_type == "TRANSFORMATION_COMPLETION":
+            self._execute_transformation_completion(data)
+        elif req_type == "PERSONNEL_PAYMENT":
+            self._execute_personnel_payment(data)
+        elif req_type == "TRANSFORMATION_EXPENSE":
+            self._execute_transformation_expense(data)
+
+    def _execute_transformation_completion(self, data: dict):
+        from ..crud.transformation import TransformationService
+        from datetime import datetime, timezone
+
+        t_id = data["transformation_id"]
+        completion_date_str = data.get("completion_date")
+        completion_date = None
+        if completion_date_str:
+            completion_date = datetime.fromisoformat(completion_date_str)
+            if completion_date.tzinfo is None:
+                completion_date = completion_date.replace(tzinfo=timezone.utc)
+
+        svc = TransformationService(self.db)
+        # Guard: skip if already complete
+        t = svc.get_by_id(t_id)
+        if t and t.to_date is not None:
+            return  # Already complete, skip
+        result = svc.complete(t_id, completion_date=completion_date)
+        if result is not None:
+            raise ValueError(f"Failed to complete transformation {t_id}: {result}")
+
+    def _execute_personnel_payment(self, data: dict):
+        from ..crud.transformation import TransformationService
+        from ..models.personnel import TransformationPersonnel
+        from decimal import Decimal
+
+        t_id = data["transformation_id"]
+        tp_id = data["personnel_assignment_id"]
+
+        # Apply additional_payments override if present in approved data
+        if data.get("additional_payments") is not None:
+            tp = self.db.query(TransformationPersonnel).filter(
+                TransformationPersonnel.id == tp_id,
+                TransformationPersonnel.transformation_id == t_id,
+            ).first()
+            if tp:
+                tp.additional_payments = Decimal(str(data["additional_payments"]))
+                if "additional_payments_description" in data and data["additional_payments_description"] is not None:
+                    tp.additional_payments_description = data["additional_payments_description"]
+                self.db.flush()
+
+        svc = TransformationService(self.db)
+        result = svc.mark_personnel_paid(t_id, tp_id)
+        if result in ("already_paid", "not_found"):
+            return  # Guard: skip if already paid or assignment was deleted
+        if result is not None:
+            raise ValueError(f"Failed to mark personnel paid: {result}")
+
+    def _execute_transformation_expense(self, data: dict):
+        from datetime import datetime, timezone
+
+        expense_data = ExpenseCreate(
+            date=data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d")),
+            amount=data["amount"],
+            category_id=data["category_id"],
+            description=data.get("description", ""),
+            transformation_id=data["transformation_id"],
+        )
+        ExpenseService(self.db).create(expense_data)

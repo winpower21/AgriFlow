@@ -10,7 +10,7 @@
                     <i class="bi bi-tags"></i>
                     <span>Manage Types</span>
                 </button>
-                <button v-if="isAdmin" class="btn-primary" @click="openCreateModal">
+                <button class="btn-primary" @click="openCreateModal">
                     <i class="bi bi-plus-lg"></i>
                     <span>New Transformation</span>
                 </button>
@@ -79,7 +79,7 @@
                             <span class="date-value">{{ t.to_date ? formatDate(t.to_date) : '—' }}</span>
                         </span>
                     </div>
-                    <div v-if="isAdmin" class="trans-card-actions" @click.stop>
+                    <div v-if="isAdmin && !t.to_date" class="trans-card-actions" @click.stop>
                         <button class="btn-action btn-delete" title="Delete" @click.stop="confirmDelete(t)">
                             <i class="bi bi-trash3"></i>
                         </button>

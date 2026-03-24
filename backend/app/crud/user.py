@@ -94,29 +94,18 @@ class UserService:
         return self.db.query(User).filter(not User.is_verified).order_by(User.id).all()
 
     def create_user(self, user: UserCreate) -> UserSchema:
-        """Create a new user with the default 'user' role.
-
-        Steps:
-          1. Hash the plaintext password with bcrypt.
-          2. Look up the 'user' Role record.
-          3. Create the User ORM object with role_id set (scalar FK).
-          4. Also append the role to the many-to-many ``roles`` list.
-          5. Commit and return the refreshed user.
-        """
-        print(f"DEBUG: Password length: {len(user.password)}")
+        """Create a new user with the default 'manager' role."""
         hashed_password = get_password_hash(user.password)
-        # Fetch the default 'user' role — seeded at application startup
-        default_role = self.db.query(Role).filter(Role.name == "user").first()
+        default_role = self.db.query(Role).filter(Role.name == "manager").first()
+        if not default_role:
+            raise ValueError("Default 'manager' role not found in database")
         db_user = User(
             email=user.email,
             full_name=user.full_name,
             hashed_password=hashed_password,
             role_id=default_role.id,
         )
-        if default_role:
-            # Append to many-to-many relationship for role-based access checks
-            db_user.roles.append(default_role)
-
+        db_user.roles.append(default_role)
         self.db.add(db_user)
         self.db.commit()
         self.db.refresh(db_user)

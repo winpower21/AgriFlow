@@ -83,6 +83,7 @@ class BatchStage(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     icon: Mapped[str | None] = mapped_column(String(50), nullable=True)
     color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    is_waste: Mapped[bool] = mapped_column(default=False, server_default="false")
 
     # Self-referential hierarchy
     parent: Mapped["BatchStage | None"] = relationship(

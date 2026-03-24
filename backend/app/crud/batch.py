@@ -58,12 +58,24 @@ class BatchService:
         return self.get_by_id(batch_id)
 
     def delete(self, batch_id: int) -> Optional[str]:
-        """Returns None on success, 'not_found', or 'in_use'."""
-        from ..models.transformation import TransformationInput, TransformationOutput
+        """Returns None on success, 'not_found', 'completed_transformation_output', or 'in_use'."""
+        from ..models.transformation import TransformationInput, TransformationOutput, Transformation
 
         obj = self.db.query(Batch).filter(Batch.id == batch_id).first()
         if not obj:
             return "not_found"
+        # Check completed transformation output FIRST (more specific error)
+        t_output = (
+            self.db.query(TransformationOutput)
+            .join(Transformation, TransformationOutput.transformation_id == Transformation.id)
+            .filter(
+                TransformationOutput.batch_id == batch_id,
+                Transformation.to_date.isnot(None),
+            )
+            .first()
+        )
+        if t_output:
+            return "completed_transformation_output"
         in_input = (
             self.db.query(TransformationInput)
             .filter(TransformationInput.batch_id == batch_id)
@@ -159,13 +171,13 @@ class BatchService:
         sql = text("""
             WITH RECURSIVE ancestors AS (
                 SELECT b.id, b.batch_code, b.remaining_weight_kg, b.is_depleted,
-                       bs.name AS stage_name
+                       bs.name AS stage_name, bs.is_waste
                 FROM batches b
                 LEFT JOIN batch_stages bs ON b.stage_id = bs.id
                 WHERE b.id = :batch_id
                 UNION ALL
                 SELECT b.id, b.batch_code, b.remaining_weight_kg, b.is_depleted,
-                       bs.name AS stage_name
+                       bs.name AS stage_name, bs.is_waste
                 FROM batch_parents bp
                 INNER JOIN ancestors a ON bp.child_batch_id = a.id
                 INNER JOIN batches b ON bp.parent_batch_id = b.id
@@ -173,13 +185,13 @@ class BatchService:
             ),
             descendants AS (
                 SELECT b.id, b.batch_code, b.remaining_weight_kg, b.is_depleted,
-                       bs.name AS stage_name
+                       bs.name AS stage_name, bs.is_waste
                 FROM batches b
                 LEFT JOIN batch_stages bs ON b.stage_id = bs.id
                 WHERE b.id = :batch_id
                 UNION ALL
                 SELECT b.id, b.batch_code, b.remaining_weight_kg, b.is_depleted,
-                       bs.name AS stage_name
+                       bs.name AS stage_name, bs.is_waste
                 FROM batch_parents bp
                 INNER JOIN descendants d ON bp.parent_batch_id = d.id
                 INNER JOIN batches b ON bp.child_batch_id = b.id
@@ -191,10 +203,10 @@ class BatchService:
                    OR parent_batch_id IN (SELECT id FROM ancestors UNION SELECT id FROM descendants)
             )
             SELECT 'node' AS row_type, id, batch_code, remaining_weight_kg, is_depleted,
-                   stage_name, NULL::int AS child_id, NULL::int AS parent_id
+                   stage_name, is_waste, NULL::int AS child_id, NULL::int AS parent_id
             FROM (SELECT * FROM ancestors UNION SELECT * FROM descendants) all_nodes
             UNION ALL
-            SELECT 'edge' AS row_type, NULL, NULL, NULL, NULL, NULL,
+            SELECT 'edge' AS row_type, NULL, NULL, NULL, NULL, NULL, NULL::bool,
                    child_batch_id, parent_batch_id
             FROM edges
         """)
@@ -215,6 +227,7 @@ class BatchService:
                     "stage_name": row.stage_name,
                     "remaining_weight_kg": row.remaining_weight_kg,
                     "is_depleted": row.is_depleted,
+                    "is_waste": row.is_waste or False,
                 }
                 parent_map[row.id] = []
                 child_map[row.id] = []
@@ -262,6 +275,7 @@ class BatchService:
                     "stage_name": batch.stage.name if batch.stage else None,
                     "remaining_weight_kg": batch.remaining_weight_kg,
                     "is_depleted": batch.is_depleted,
+                    "is_waste": batch.stage.is_waste if batch.stage else False,
                     "parents": [],
                     "children": [],
                 }
@@ -271,6 +285,7 @@ class BatchService:
                 "stage_name": None,
                 "remaining_weight_kg": Decimal("0"),
                 "is_depleted": False,
+                "is_waste": False,
                 "parents": [],
                 "children": [],
             }

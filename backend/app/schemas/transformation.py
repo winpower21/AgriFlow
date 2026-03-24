@@ -52,7 +52,7 @@ class TransformationOutputCreate(BaseModel):
 
 class TransformationPersonnelCreate(BaseModel):
     personnel_id: int
-    days_worked: Decimal  # Required for both wage types
+    days_worked: Optional[Decimal] = None  # Optional; required for DAILY wage types
     output_weight_considered: Optional[Decimal] = None  # Optional for DAILY, required for PER_KG
     additional_payments: Decimal = Decimal("0")
     additional_payments_description: Optional[str] = None
@@ -113,6 +113,7 @@ class TransformationOutputDetail(BaseModel):
     batch_id: int
     batch_code: Optional[str] = None
     stage_name: Optional[str] = None
+    stage_is_waste: bool = False
     output_weight: Decimal
     model_config = ConfigDict(from_attributes=True)
 
@@ -125,6 +126,7 @@ class PersonnelAssignmentDetail(BaseModel):
     assignment_date: datetime
     wage_type_at_time_id: int
     wage_type_name: Optional[str] = None
+    wage_type_calculation_method: Optional[str] = None
     rate_at_time: Decimal
     days_worked: Optional[Decimal] = None
     output_weight_considered: Optional[Decimal] = None
@@ -232,3 +234,20 @@ class TransformationListItem(BaseModel):
     total_input_weight: Optional[Decimal] = None
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class TransformationCompleteRequest(BaseModel):
+    completion_date: Optional[datetime] = None
+    notes: Optional[str] = None
+
+class PaymentRequestBody(BaseModel):
+    additional_payments: Optional[Decimal] = None
+    additional_payments_description: Optional[str] = None
+    notes: Optional[str] = None
+
+class TransformationExpenseRequestBody(BaseModel):
+    amount: Decimal
+    category_id: int
+    description: Optional[str] = None
+    date: Optional[str] = None
+    notes: Optional[str] = None

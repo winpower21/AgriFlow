@@ -118,4 +118,9 @@ def delete_batch(batch_id: int, db: Session = Depends(get_db)):
             status_code=status.HTTP_409_CONFLICT,
             detail="Batch cannot be deleted: it is referenced by one or more transformations",
         )
+    if result == "completed_transformation_output":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a batch that is an output of a completed transformation",
+        )
     return ApiResponse(data=None, message="Batch deleted successfully", type="success")

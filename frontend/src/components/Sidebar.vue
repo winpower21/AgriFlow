@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 
@@ -25,7 +26,7 @@ function handleLogout() {
     router.push({ name: "login" });
 }
 
-const navItems = [
+const allNavItems = [
     { icon: "bi-grid-1x2",       label: "Dashboard",   route: "dashboard" },
     { icon: "bi-tree",            label: "Plantations",  route: "plantations" },
     { icon: "bi-layers",          label: "Batches",         route: "batches" },
@@ -34,15 +35,20 @@ const navItems = [
     { icon: "bi-truck",           label: "Vehicles",     route: "vehicles" },
     { icon: "bi-box-seam",        label: "Consumables",  route: "consumables" },
     { icon: "bi-receipt",         label: "Expenses",     route: "expenses" },
+    { icon: "bi-clipboard-check", label: "Approvals",    route: "approvals" },
     { icon: "bi-cart3",           label: "Sales",        route: "sales" },
     { icon: "bi-graph-up",        label: "Reports",      route: "reports" },
     { icon: "bi-cloud-sun",       label: "Weather",      route: "weather" },
     { icon: "bi-person-gear",     label: "Users",        route: "manage-users" },
 ];
 
+const navItems = computed(() =>
+    allNavItems.filter(item => item.label !== "Users" || auth.userRoles?.includes("admin"))
+);
+
 // Items shown in the mobile bottom bar (limited to 5 slots including more)
-const mobileNavItems = navItems.slice(0, 4);
-const mobileSidebarItems = navItems.slice(4);
+const mobileNavItems = computed(() => navItems.value.slice(0, 4));
+const mobileSidebarItems = computed(() => navItems.value.slice(4));
 </script>
 
 <template>

@@ -17,6 +17,7 @@ class BatchStageSchema(BaseModel):
     sort_order: int = 0
     icon: str | None = None
     color: str | None = None
+    is_waste: bool = False
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -90,6 +91,7 @@ class BatchGenealogyNode(BaseModel):
     stage_name: Optional[str] = None
     remaining_weight_kg: Decimal
     is_depleted: bool
+    is_waste: bool = False
     parents: List["BatchGenealogyNode"] = []
     children: List["BatchGenealogyNode"] = []
     model_config = ConfigDict(from_attributes=True)

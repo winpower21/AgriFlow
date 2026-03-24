@@ -19,6 +19,7 @@ Wage Calculation:
 
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum as PyEnum
 from typing import TYPE_CHECKING, List, Optional
 
 from sqlalchemy import ForeignKey, Numeric, String, UniqueConstraint, func
@@ -29,6 +30,12 @@ from ..database import Base
 if TYPE_CHECKING:
     from .expense import Expense
     from .transformation import Transformation
+
+
+class CalculationMethod(str, PyEnum):
+    OUTPUT = "OUTPUT"
+    DAILY = "DAILY"
+    MONTHLY = "MONTHLY"
 
 
 class WageType(Base):
@@ -46,6 +53,9 @@ class WageType(Base):
     name: Mapped[str] = mapped_column(
         String(50), unique=True
     )  # Wage type identifier, e.g. "DAILY", "PER_KG"
+    calculation_method: Mapped[str] = mapped_column(
+        String(20), default="DAILY"
+    )  # OUTPUT, DAILY, or MONTHLY — determines wage calculation formula
     # All personnel currently assigned this wage type
     personnel: Mapped[List["Personnel"]] = relationship(back_populates="wage_type")
     # All transformation assignments that had this wage type at the time of assignment (frozen snapshot)
@@ -82,6 +92,8 @@ class Personnel(Base):
     address: Mapped[str | None] = mapped_column(
         String(500)
     )  # Residential address (optional)
+    salary_payment_date: Mapped[int | None] = mapped_column(nullable=True)
+    # Day of month (1-28) when salary is due. Only relevant for MONTHLY personnel.
 
     is_active: Mapped[bool] = mapped_column(
         default=True

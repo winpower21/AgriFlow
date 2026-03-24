@@ -49,6 +49,7 @@
               <th class="text-end">Labor</th>
               <th class="text-end">Consumable</th>
               <th class="text-end">Vehicle</th>
+              <th class="text-end">Expense</th>
             </tr>
           </thead>
           <tbody>
@@ -59,6 +60,7 @@
               <td class="text-end cell-labor">{{ formatCurrency(item.breakdown?.labor_cost) }}</td>
               <td class="text-end cell-consumable">{{ formatCurrency(item.breakdown?.consumable_cost) }}</td>
               <td class="text-end cell-vehicle">{{ formatCurrency(item.breakdown?.vehicle_cost) }}</td>
+              <td class="text-end cell-expense">{{ formatCurrency(item.breakdown?.expense_cost) }}</td>
             </tr>
           </tbody>
         </table>
@@ -247,4 +249,5 @@ const costTrendChartOptions = {
 .cell-labor { background: rgba(138, 154, 123, 0.08); }
 .cell-consumable { background: rgba(181, 105, 77, 0.08); }
 .cell-vehicle { background: rgba(196, 163, 90, 0.08); }
+.cell-expense { background: rgba(160, 120, 100, 0.08); }
 </style>

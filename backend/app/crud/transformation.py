@@ -94,25 +94,51 @@ class TransformationService:
         self.db.refresh(obj)
         return self._load_full(obj.id)
 
-    def update(self, t_id: int, data: TransformationUpdate) -> Optional[Transformation]:
+    def update(self, t_id: int, data: TransformationUpdate) -> Optional[str]:
         obj = self.db.query(Transformation).filter(Transformation.id == t_id).first()
         if not obj:
-            return None
+            return "not_found"
+        if obj.to_date is not None:
+            return "complete"
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(obj, field, value)
         self.db.commit()
-        return self._load_full(t_id)
+        return None
 
-    def complete(self, t_id: int) -> Optional[str]:
+    def complete(self, t_id: int, completion_date: Optional[datetime] = None) -> Optional[str]:
         """Returns None on success, or error string."""
         obj = self.db.query(Transformation).filter(Transformation.id == t_id).first()
         if not obj:
             return "not_found"
-        outputs = self.db.query(TransformationOutput).filter(
+        outputs = self.db.query(TransformationOutput).options(
+            joinedload(TransformationOutput.batch).joinedload(Batch.stage)
+        ).filter(
             TransformationOutput.transformation_id == t_id
         ).all()
         if not outputs:
             return "no_outputs"
+
+        # Load transformation type for root/non-root checks
+        transformation_type = self.db.query(TransformationType).filter(
+            TransformationType.id == obj.type_id
+        ).first()
+
+        # Query inputs once — used for input gate, mass-balance, and cost calculation
+        inputs = self.db.query(TransformationInput).filter(
+            TransformationInput.transformation_id == t_id
+        ).all()
+
+        # Input gate: non-root transformations require at least one input
+        if transformation_type and not transformation_type.is_root:
+            if not inputs:
+                return "non_root_no_inputs"
+
+        # Mass-balance check: total input must equal total output (±0.01 kg tolerance)
+        if transformation_type and not transformation_type.is_root:
+            total_input = sum(Decimal(str(inp.input_weight)) for inp in inputs)
+            total_output_weight = sum(o.output_weight for o in outputs)
+            if abs(total_output_weight - total_input) > Decimal("0.01"):
+                return "weight_mismatch"
 
         # Validate personnel assignments: sum of output_weight_considered <= total output weight
         total_output = sum(o.output_weight for o in outputs)
@@ -124,7 +150,7 @@ class TransformationService:
         if total_assigned > total_output:
             return "personnel_output_exceeded"
 
-        obj.to_date = datetime.now(timezone.utc)
+        obj.to_date = completion_date or datetime.now(timezone.utc)
 
         # ── Compute cost_per_kg for output batches ──────────────────────
         # IMPORTANT: Avoid double-counting:
@@ -173,9 +199,6 @@ class TransformationService:
         )
 
         # 5. Input material cost (accumulated from parent batches)
-        inputs = self.db.query(TransformationInput).filter(
-            TransformationInput.transformation_id == t_id
-        ).all()
         input_material_cost = sum(
             Decimal(str(inp.input_weight or 0)) * Decimal(str(inp.batch.cost_per_kg or 0))
             for inp in inputs
@@ -183,23 +206,33 @@ class TransformationService:
 
         total_cost = Decimal(str(personnel_cost)) + Decimal(str(vehicle_cost)) + Decimal(str(consumable_cost)) + Decimal(str(expense_cost)) + input_material_cost
 
-        if total_output > 0:
-            cost_per_kg = total_cost / Decimal(str(total_output))
+        # Partition outputs into non-waste and waste
+        non_waste_outputs = [o for o in outputs if not (o.batch.stage and o.batch.stage.is_waste)]
+        waste_outputs = [o for o in outputs if o.batch.stage and o.batch.stage.is_waste]
+
+        non_waste_total = sum(o.output_weight for o in non_waste_outputs)
+
+        if non_waste_total > 0:
+            cost_per_kg = total_cost / Decimal(str(non_waste_total))
         else:
             cost_per_kg = Decimal("0")
 
-        # Freeze cost_per_kg on all output batches
-        for out in outputs:
+        # Freeze cost_per_kg: non-waste batches get computed cost, waste batches get 0
+        for out in non_waste_outputs:
             out.batch.cost_per_kg = cost_per_kg
+        for out in waste_outputs:
+            out.batch.cost_per_kg = Decimal("0")
 
         self.db.commit()
         return None
 
     def delete(self, t_id: int) -> Optional[str]:
-        """Returns None on success, 'not_found', or 'has_outputs'."""
+        """Returns None on success, 'not_found', 'complete', or 'has_outputs'."""
         obj = self.db.query(Transformation).filter(Transformation.id == t_id).first()
         if not obj:
             return "not_found"
+        if obj.to_date is not None:
+            return "complete"
         output_count = self.db.query(TransformationOutput).filter(
             TransformationOutput.transformation_id == t_id
         ).count()
@@ -284,6 +317,11 @@ class TransformationService:
             TransformationInput.transformation_id == t_id
         ).all()
 
+        # Input gate: non-root transformations require at least one input
+        if not (transformation.transformation_type and transformation.transformation_type.is_root):
+            if not inputs:
+                return "non_root_no_inputs"
+
         # Determine plantation_id: only valid for root transformations
         plantation_id = None
         if transformation.transformation_type and transformation.transformation_type.is_root:
@@ -352,15 +390,19 @@ class TransformationService:
         transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
         if not transformation:
             return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         personnel = self.db.query(Personnel).filter(Personnel.id == data.personnel_id).first()
         if not personnel:
             return "personnel_not_found"
 
-        wage_type_name = personnel.wage_type.name if personnel.wage_type else ""
+        calc_method = personnel.wage_type.calculation_method if personnel.wage_type else "DAILY"
 
-        # Validate PER_KG requires output_weight_considered
-        if wage_type_name.upper() == "PER_KG" and not data.output_weight_considered:
+        # Validate OUTPUT requires output_weight_considered
+        if calc_method == "OUTPUT" and not data.output_weight_considered:
             return "output_weight_required"
+        if calc_method == "DAILY" and not data.days_worked:
+            return "days_worked_required"
 
         # Validate output_weight_considered doesn't exceed remaining assignable qty
         if data.output_weight_considered:
@@ -381,12 +423,14 @@ class TransformationService:
                 return "output_weight_exceeded"
 
         # Calculate base wage
-        if wage_type_name.upper() == "PER_KG":
+        if calc_method == "OUTPUT":
             base_wage = personnel.current_rate * data.output_weight_considered
-        else:  # DAILY
+        elif calc_method == "DAILY":
             base_wage = personnel.current_rate * data.days_worked
+        else:  # MONTHLY
+            base_wage = Decimal("0")
 
-        total_wages_payable = base_wage + data.additional_payments
+        total_wages_payable = base_wage + (data.additional_payments or Decimal("0"))
 
         assignment = TransformationPersonnel(
             transformation_id=t_id,
@@ -408,6 +452,11 @@ class TransformationService:
         return None
 
     def update_personnel(self, t_id: int, tp_id: int, data: TransformationPersonnelUpdate) -> Optional[str]:
+        transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
+        if not transformation:
+            return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         tp = self.db.query(TransformationPersonnel).filter(
             TransformationPersonnel.id == tp_id,
             TransformationPersonnel.transformation_id == t_id,
@@ -419,11 +468,13 @@ class TransformationService:
             setattr(tp, field, value)
 
         # Recalculate wages
-        wage_type_name = tp.wage_type.name if tp.wage_type else ""
-        if wage_type_name.upper() == "PER_KG" and tp.output_weight_considered:
+        calc_method = tp.wage_type.calculation_method if tp.wage_type else "DAILY"
+        if calc_method == "OUTPUT" and tp.output_weight_considered:
             tp.base_wage = tp.rate_at_time * tp.output_weight_considered
-        else:
+        elif calc_method == "DAILY":
             tp.base_wage = tp.rate_at_time * (tp.days_worked or Decimal("0"))
+        else:  # MONTHLY
+            tp.base_wage = Decimal("0")
 
         tp.total_wages_payable = tp.base_wage + (tp.additional_payments or Decimal("0"))
 
@@ -431,6 +482,11 @@ class TransformationService:
         return None
 
     def remove_personnel(self, t_id: int, tp_id: int) -> Optional[str]:
+        transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
+        if not transformation:
+            return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         tp = self.db.query(TransformationPersonnel).filter(
             TransformationPersonnel.id == tp_id,
             TransformationPersonnel.transformation_id == t_id,
@@ -466,6 +522,7 @@ class TransformationService:
             amount=tp.total_wages_payable,
             category_id=labour_cat.id,
             transformation_id=t_id,
+            personnel_id=tp.personnel_id,
             description=f"Wages for {tp.personnel.name if tp.personnel else 'Unknown'}"
         )
         self.db.add(expense)
@@ -503,6 +560,8 @@ class TransformationService:
         transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
         if not transformation:
             return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         vehicle = self.db.query(Vehicle).filter(Vehicle.id == data.vehicle_id).first()
         if not vehicle:
             return "vehicle_not_found"
@@ -552,6 +611,11 @@ class TransformationService:
         return None
 
     def update_vehicle(self, t_id: int, tv_id: int, data: TransformationVehicleUpdate) -> Optional[str]:
+        transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
+        if not transformation:
+            return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         tv = self.db.query(TransformationVehicle).filter(
             TransformationVehicle.id == tv_id,
             TransformationVehicle.transformation_id == t_id,
@@ -566,6 +630,11 @@ class TransformationService:
     def remove_vehicle(self, t_id: int, tv_id: int) -> Optional[str]:
         from ..models.consumables import ConsumableConsumption, ConsumablePurchase, ConsumptionAllocation
 
+        transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
+        if not transformation:
+            return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         tv = self.db.query(TransformationVehicle).filter(
             TransformationVehicle.id == tv_id,
             TransformationVehicle.transformation_id == t_id,
@@ -601,6 +670,8 @@ class TransformationService:
         transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
         if not transformation:
             return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         return consumable_svc.record_consumption(
             consumable_id=data.consumable_id,
             quantity_used=data.quantity_used,
@@ -612,6 +683,11 @@ class TransformationService:
     def remove_consumable(self, t_id: int, tc_id: int) -> Optional[str]:
         """Remove consumption and reverse FIFO allocations."""
         from ..models.consumables import ConsumablePurchase, ConsumptionAllocation
+        transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
+        if not transformation:
+            return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         consumption = self.db.query(ConsumableConsumption).filter(
             ConsumableConsumption.id == tc_id,
             ConsumableConsumption.transformation_id == t_id,
@@ -641,6 +717,8 @@ class TransformationService:
         transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
         if not transformation:
             return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
 
         category = self.db.query(ExpenseCategory).filter(
             ExpenseCategory.id == data.category_id
@@ -661,6 +739,11 @@ class TransformationService:
 
     def remove_expense(self, t_id: int, expense_id: int) -> Optional[str]:
         """Remove an expense from a transformation. Blocks deletion of wage expenses."""
+        transformation = self.db.query(Transformation).filter(Transformation.id == t_id).first()
+        if not transformation:
+            return "not_found"
+        if transformation.to_date is not None:
+            return "complete"
         expense = self.db.query(Expense).filter(
             Expense.id == expense_id,
             Expense.transformation_id == t_id,

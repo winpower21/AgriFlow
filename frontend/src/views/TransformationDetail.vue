@@ -22,16 +22,19 @@
                 </div>
             </div>
             <div class="header-actions">
-                <button v-if="isAdmin && !transformation.to_date && transformation.outputs?.length > 0"
-                    class="btn-complete" @click="markComplete" :disabled="completing">
+                <span v-if="hasPendingCompletionApproval()" class="badge-pending-approval">
+                    <i class="bi bi-hourglass-split"></i> Completion Pending Approval
+                </span>
+                <button v-if="!transformation.to_date && transformation.outputs?.length > 0"
+                    class="btn-complete" @click="openCompletionModal" :disabled="completing || hasPendingCompletionApproval()">
                     <i class="bi bi-check-circle"></i>
                     <span v-if="completing">Completing...</span>
-                    <span v-else>Mark Complete</span>
+                    <span v-else>{{ isAdmin ? 'Mark Complete' : 'Request Completion' }}</span>
                 </button>
-                <button v-if="isAdmin" class="btn-secondary" @click="openEditModal">
+                <button v-if="!isComplete" class="btn-secondary" @click="openEditModal">
                     <i class="bi bi-pencil"></i> Edit
                 </button>
-                <button v-if="isAdmin" class="btn-danger-outline" @click="openDeleteModal">
+                <button v-if="!isComplete" class="btn-danger-outline" @click="openDeleteModal">
                     <i class="bi bi-trash3"></i>
                 </button>
             </div>
@@ -42,8 +45,13 @@
             <!-- Input Batches -->
             <div class="content-panel" v-if="!transformation.transformation_type?.is_root">
                 <div class="panel-header">
-                    <span><i class="bi bi-box-arrow-in-down"></i> Input Batches</span>
-                    <button v-if="isAdmin && !transformation.to_date" class="btn-panel-add" @click="openInputModal">
+                    <span>
+                        <i class="bi bi-box-arrow-in-down"></i> Input Batches
+                        <span v-if="transformation.inputs?.length" class="info-badge">
+                            {{ formatKg(remainingAssignableQty) }} kg remaining
+                        </span>
+                    </span>
+                    <button v-if="!transformation.to_date" class="btn-panel-add" @click="openInputModal">
                         <i class="bi bi-plus-lg"></i> Add
                     </button>
                 </div>
@@ -59,7 +67,7 @@
                             </div>
                             <div class="resource-meta">
                                 <span class="weight-val">{{ formatKg(inp.input_weight) }} kg</span>
-                                <button v-if="isAdmin && !transformation.to_date" class="btn-icon-danger" @click="removeInput(inp.id)" title="Remove">
+                                <button v-if="!transformation.to_date" class="btn-icon-danger" @click="removeInput(inp.id)" title="Remove">
                                     <i class="bi bi-x"></i>
                                 </button>
                             </div>
@@ -72,7 +80,7 @@
             <div class="content-panel">
                 <div class="panel-header">
                     <span><i class="bi bi-box-arrow-up"></i> Output Batches</span>
-                    <button v-if="isAdmin && !transformation.to_date" class="btn-panel-add" @click="openOutputModal">
+                    <button v-if="!transformation.to_date" class="btn-panel-add" @click="openOutputModal">
                         <i class="bi bi-plus-lg"></i> Add
                     </button>
                 </div>
@@ -89,7 +97,7 @@
                             </div>
                             <div class="resource-meta">
                                 <span class="weight-val">{{ formatKg(out.output_weight) }} kg</span>
-                                <button v-if="isAdmin && !transformation.to_date" class="btn-icon-danger" @click="removeOutput(out.id)" title="Remove">
+                                <button v-if="!transformation.to_date" class="btn-icon-danger" @click="removeOutput(out.id)" title="Remove">
                                     <i class="bi bi-x"></i>
                                 </button>
                             </div>
@@ -111,7 +119,7 @@
                             {{ formatKg(transformation.remaining_assignable_output_qty) }} kg assignable
                         </span>
                     </span>
-                    <button v-if="isAdmin" class="btn-panel-add" @click="openPersonnelModal(null)">
+                    <button v-if="!isComplete" class="btn-panel-add" @click="openPersonnelModal(null)">
                         <i class="bi bi-plus-lg"></i> Assign
                     </button>
                 </div>
@@ -121,16 +129,23 @@
                         <div v-for="p in transformation.personnel_assignments" :key="p.id" class="resource-row">
                             <div class="resource-main">
                                 <span class="resource-name">{{ p.personnel_name }}</span>
-                                <span class="resource-sub">{{ p.wage_type_name }} · ₹{{ formatNum(p.rate_at_time) }}/{{ p.wage_type_name === 'DAILY' ? 'day' : 'kg' }}</span>
+                                <span class="resource-sub">{{ p.wage_type_name }} · {{ p.wage_type_calculation_method === 'MONTHLY' ? 'Salaried' : '₹' + formatNum(p.rate_at_time) + '/' + (p.wage_type_calculation_method === 'DAILY' ? 'day' : 'kg') }}</span>
                                 <span v-if="p.additional_payments" class="resource-sub">+₹{{ formatNum(p.additional_payments) }} extra</span>
                                 <span class="stage-badge-sm" :class="p.is_paid ? 'stage-pack' : 'stage-dry'">{{ p.is_paid ? 'Paid' : 'Unpaid' }}</span>
+                                <span v-if="hasPendingPaymentApproval(p.id)" class="badge-pending-approval">
+                                    <i class="bi bi-hourglass-split"></i> Pending Approval
+                                </span>
                             </div>
                             <div class="resource-meta">
-                                <span class="weight-val">₹{{ formatNum(p.total_wages_payable) }}</span>
-                                <button v-if="isAdmin && !p.is_paid" class="btn-icon-edit" @click="markPersonnelPaid(p.id)" title="Mark Paid"><i class="bi bi-check-lg"></i></button>
-                                <button v-if="isAdmin && p.is_paid" class="btn-icon-edit" @click="markPersonnelUnpaid(p.id)" title="Mark Unpaid"><i class="bi bi-arrow-counterclockwise"></i></button>
-                                <button v-if="isAdmin" class="btn-icon-edit" @click="openPersonnelModal(p)" title="Edit"><i class="bi bi-pencil"></i></button>
-                                <button v-if="isAdmin" class="btn-icon-danger" @click="removePersonnel(p.id)" title="Remove"><i class="bi bi-x"></i></button>
+                                <template v-if="p.wage_type_calculation_method !== 'MONTHLY'">
+                                    <span class="weight-val">₹{{ formatNum(p.total_wages_payable) }}</span>
+                                    <button v-if="isAdmin && !p.is_paid" class="btn-icon-edit" @click="markPersonnelPaid(p.id)" title="Mark Paid"><i class="bi bi-check-lg"></i></button>
+                                    <button v-if="!isAdmin && !p.is_paid" class="btn-icon-edit" @click="requestPayment(p.id)" title="Request Payment" :disabled="hasPendingPaymentApproval(p.id)"><i class="bi bi-send"></i></button>
+                                    <button v-if="isAdmin && p.is_paid" class="btn-icon-edit" @click="markPersonnelUnpaid(p.id)" title="Mark Unpaid"><i class="bi bi-arrow-counterclockwise"></i></button>
+                                </template>
+                                <span v-else class="resource-sub">Salaried</span>
+                                <button v-if="!isComplete" class="btn-icon-edit" @click="openPersonnelModal(p)" title="Edit"><i class="bi bi-pencil"></i></button>
+                                <button v-if="!isComplete" class="btn-icon-danger" @click="removePersonnel(p.id)" title="Remove"><i class="bi bi-x"></i></button>
                             </div>
                         </div>
                     </div>
@@ -141,7 +156,7 @@
             <div class="content-panel">
                 <div class="panel-header">
                     <span><i class="bi bi-truck"></i> Vehicles</span>
-                    <button v-if="isAdmin" class="btn-panel-add" @click="openVehicleModal(null)">
+                    <button v-if="!isComplete" class="btn-panel-add" @click="openVehicleModal(null)">
                         <i class="bi bi-plus-lg"></i> Assign
                     </button>
                 </div>
@@ -157,8 +172,8 @@
                             </div>
                             <div class="resource-meta">
                                 <span class="weight-val">₹{{ formatNum(v.fuel_cost) }}</span>
-                                <button v-if="isAdmin" class="btn-icon-edit" @click="openVehicleModal(v)" title="Edit"><i class="bi bi-pencil"></i></button>
-                                <button v-if="isAdmin" class="btn-icon-danger" @click="removeVehicle(v.id)" title="Remove"><i class="bi bi-x"></i></button>
+                                <button v-if="!isComplete" class="btn-icon-edit" @click="openVehicleModal(v)" title="Edit"><i class="bi bi-pencil"></i></button>
+                                <button v-if="!isComplete" class="btn-icon-danger" @click="removeVehicle(v.id)" title="Remove"><i class="bi bi-x"></i></button>
                             </div>
                         </div>
                     </div>
@@ -169,7 +184,7 @@
             <div class="content-panel panel-full">
                 <div class="panel-header">
                     <span><i class="bi bi-box-seam"></i> Consumables</span>
-                    <button v-if="isAdmin" class="btn-panel-add" @click="openConsumableModal">
+                    <button v-if="!isComplete" class="btn-panel-add" @click="openConsumableModal">
                         <i class="bi bi-plus-lg"></i> Record Usage
                     </button>
                 </div>
@@ -184,7 +199,7 @@
                             <div class="resource-meta">
                                 <span class="weight-val">₹{{ formatNum(c.total_cost) }}</span>
                                 <span class="resource-date">{{ formatDate(c.consumption_date) }}</span>
-                                <button v-if="isAdmin" class="btn-icon-danger" @click="removeConsumable(c.id)" title="Remove"><i class="bi bi-x"></i></button>
+                                <button v-if="!isComplete" class="btn-icon-danger" @click="removeConsumable(c.id)" title="Remove"><i class="bi bi-x"></i></button>
                             </div>
                         </div>
                     </div>
@@ -194,9 +209,14 @@
             <!-- Expenses -->
             <div class="content-panel panel-full">
                 <div class="panel-header">
-                    <span><i class="bi bi-receipt"></i> Expenses</span>
-                    <button v-if="isAdmin" class="btn-panel-add" @click="openExpenseModal">
-                        <i class="bi bi-plus-lg"></i> Add
+                    <span>
+                        <i class="bi bi-receipt"></i> Expenses
+                        <span v-if="pendingExpenseApprovalCount() > 0" class="badge-pending-approval">
+                            {{ pendingExpenseApprovalCount() }} pending
+                        </span>
+                    </span>
+                    <button v-if="!isComplete" class="btn-panel-add" @click="openExpenseModal">
+                        <i class="bi bi-plus-lg"></i> {{ isAdmin ? 'Add' : 'Request' }}
                     </button>
                 </div>
                 <div class="panel-body">
@@ -211,7 +231,7 @@
                             <div class="resource-meta">
                                 <span class="weight-val">₹{{ formatNum(e.amount) }}</span>
                                 <span class="resource-date">{{ formatDate(e.date) }}</span>
-                                <button v-if="isAdmin && !e.is_wage_expense" class="btn-icon-danger" @click="removeExpense(e.id)" title="Remove">
+                                <button v-if="isAdmin && !e.is_wage_expense && !isComplete" class="btn-icon-danger" @click="removeExpense(e.id)" title="Remove">
                                     <i class="bi bi-x"></i>
                                 </button>
                             </div>
@@ -332,7 +352,12 @@
                             <label class="form-label">Stage *</label>
                             <select v-model="outputForm.stage_id" class="form-control form-select">
                                 <option :value="null" disabled>Select stage...</option>
-                                <option v-for="s in stages" :key="s.id" :value="s.id">{{ s.name }}</option>
+                                <optgroup label="Batch Stages">
+                                    <option v-for="s in nonWasteStages" :key="s.id" :value="s.id">{{ s.name }}</option>
+                                </optgroup>
+                                <optgroup v-if="wasteStages.length" label="Waste Stages">
+                                    <option v-for="s in wasteStages" :key="s.id" :value="s.id" class="waste-stage-option">{{ s.name }}</option>
+                                </optgroup>
                             </select>
                         </div>
                         <div class="form-group">
@@ -376,19 +401,19 @@
                             <label class="form-label">Personnel *</label>
                             <select v-model="personnelForm.personnel_id" class="form-control form-select">
                                 <option :value="null" disabled>Select worker...</option>
-                                <option v-for="p in allPersonnel" :key="p.id" :value="p.id">{{ p.name }} ({{ p.wage_type_name }} · ₹{{ formatNum(p.rate) }}/{{ p.wage_type_name === 'DAILY' ? 'day' : 'kg' }})</option>
+                                <option v-for="p in allPersonnel" :key="p.id" :value="p.id">{{ p.name }} ({{ p.wage_type?.name }} · {{ p.wage_type?.calculation_method === 'MONTHLY' ? 'Salaried' : '₹' + formatNum(p.current_rate) + '/' + (p.wage_type?.calculation_method === 'DAILY' ? 'day' : 'kg') }})</option>
                             </select>
                         </div>
                         <div v-if="editingPersonnel" class="form-group">
-                            <p class="resource-sub">{{ editingPersonnel.wage_type_name }} · ₹{{ formatNum(editingPersonnel.rate_at_time) }}/{{ editingPersonnel.wage_type_name === 'DAILY' ? 'day' : 'kg' }}</p>
+                            <p class="resource-sub">{{ editingPersonnel.wage_type_name }} · {{ editingPersonnel.wage_type_calculation_method === 'MONTHLY' ? 'Salaried' : '₹' + formatNum(editingPersonnel.rate_at_time) + '/' + (editingPersonnel.wage_type_calculation_method === 'DAILY' ? 'day' : 'kg') }}</p>
                         </div>
-                        <div class="form-row">
+                        <div v-if="selectedPersonnelCalcMethod !== 'MONTHLY'" class="form-row">
                             <div class="form-group">
-                                <label class="form-label">Days Worked *</label>
+                                <label class="form-label">Days Worked {{ selectedPersonnelCalcMethod === 'DAILY' ? '*' : '' }}</label>
                                 <input v-model="personnelForm.days_worked" type="number" step="0.5" min="0" class="form-control" placeholder="0" />
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Output Weight (kg)</label>
+                                <label class="form-label">Output Weight (kg) {{ selectedPersonnelCalcMethod === 'OUTPUT' ? '*' : '' }}</label>
                                 <input v-model="personnelForm.output_weight_considered" type="number" step="0.01" min="0" class="form-control" placeholder="0" />
                             </div>
                         </div>
@@ -408,7 +433,7 @@
                     </div>
                     <div class="agri-modal-footer">
                         <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn-modal-confirm" :disabled="(!editingPersonnel && !personnelForm.personnel_id) || !personnelForm.days_worked || modalSaving" @click="savePersonnel">
+                        <button type="button" class="btn-modal-confirm" :disabled="(!editingPersonnel && !personnelForm.personnel_id) || (selectedPersonnelCalcMethod !== 'MONTHLY' && !personnelForm.days_worked) || modalSaving" @click="savePersonnel">
                             <span v-if="modalSaving"><i class="bi bi-hourglass-split"></i></span>
                             <span v-else>{{ editingPersonnel ? 'Save' : 'Assign' }}</span>
                         </button>
@@ -504,6 +529,31 @@
             </div>
         </div>
 
+        <!-- Completion Date Modal -->
+        <div class="modal fade" ref="completionModalRef" tabindex="-1">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">{{ isAdmin ? 'Complete Transformation' : 'Request Completion' }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Completion Date</label>
+                            <input type="date" class="form-control" v-model="completionDate" />
+                        </div>
+                        <p v-if="completeError" class="text-danger small">{{ completeError }}</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary btn-sm" @click="submitCompletion" :disabled="completing">
+                            {{ completing ? 'Submitting...' : (isAdmin ? 'Complete' : 'Submit Request') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Record Consumable Usage -->
         <div class="modal fade" id="consumableModal" tabindex="-1" ref="consumableModalRef">
             <div class="modal-dialog modal-dialog-centered">
@@ -566,12 +616,15 @@ import { Modal } from 'bootstrap'
 import api from '../utils/api'
 import { useAuthStore } from '@/stores/auth'
 import { useReportsStore } from '@/stores/reports'
+import { useNotificationStore } from '@/stores/notification'
 
 const auth = useAuthStore()
 const reportsStore = useReportsStore()
+const notificationStore = useNotificationStore()
 const route = useRoute()
 const router = useRouter()
-const isAdmin = auth.userRoles?.includes('admin')
+const isAdmin = computed(() => auth.userRoles?.includes('admin'))
+const isComplete = computed(() => !!transformation.value?.to_date)
 
 const transformation = ref(null)
 const loadError = ref('')
@@ -599,6 +652,7 @@ const consumableForm = ref({ consumable_id: null, quantity_used: '', consumption
 const expenseForm = ref({ category_id: null, amount: '', date: todayStr(), description: '' })
 const editingPersonnel = ref(null)
 const editingVehicle = ref(null)
+const transformationApprovals = ref([])
 
 // Modal refs
 const editModalRef = ref(null)
@@ -609,8 +663,11 @@ const personnelModalRef = ref(null)
 const vehicleModalRef = ref(null)
 const consumableModalRef = ref(null)
 const expenseModalRef = ref(null)
+const completionModalRef = ref(null)
 
 let bsEdit, bsDelete, bsInput, bsOutput, bsPersonnel, bsVehicle, bsConsumable, bsExpense
+let completionModal = null
+const completionDate = ref(new Date().toISOString().split('T')[0])
 
 const selectedVehicleFuelName = computed(() => {
     if (!vehicleForm.value.vehicle_id) return null
@@ -618,10 +675,30 @@ const selectedVehicleFuelName = computed(() => {
     return v?.fuel_consumable_name || null
 })
 
+const selectedPersonnelCalcMethod = computed(() => {
+    if (editingPersonnel.value) {
+        return editingPersonnel.value.wage_type_calculation_method || 'DAILY'
+    }
+    const person = allPersonnel.value.find(p => p.id === personnelForm.value.personnel_id)
+    return person?.wage_type?.calculation_method || 'DAILY'
+})
+
+const wasteStages = computed(() => stages.value.filter(s => s.is_waste))
+const nonWasteStages = computed(() => stages.value.filter(s => !s.is_waste))
+
+const remainingAssignableQty = computed(() => {
+    if (!transformation.value) return 0
+    const totalIn = transformation.value.inputs?.reduce((s, i) => s + Number(i.input_weight), 0) || 0
+    const totalOut = transformation.value.outputs?.reduce((s, o) => s + Number(o.output_weight), 0) || 0
+    return Math.max(0, totalIn - totalOut)
+})
+
 const yieldRate = computed(() => {
     if (!transformation.value) return '0'
     const totalIn = transformation.value.inputs?.reduce((s, i) => s + Number(i.input_weight), 0) || 0
-    const totalOut = transformation.value.outputs?.reduce((s, o) => s + Number(o.output_weight), 0) || 0
+    const totalOut = transformation.value.outputs
+        ?.filter(o => !o.stage_is_waste)
+        .reduce((s, o) => s + Number(o.output_weight), 0) || 0
     if (totalIn === 0) return '0'
     return (totalOut / totalIn * 100).toFixed(1)
 })
@@ -679,15 +756,35 @@ async function refreshTransformation() {
     transformation.value = res.data
 }
 
-async function markComplete() {
+function openCompletionModal() {
+    completionDate.value = new Date().toISOString().split('T')[0]
+    completeError.value = ''
+    if (!completionModal) completionModal = new Modal(completionModalRef.value)
+    completionModal.show()
+}
+
+async function submitCompletion() {
     completing.value = true
     completeError.value = ''
     try {
-        await api.post(`/transformations/${route.params.id}/complete`)
+        if (isAdmin.value) {
+            await api.post(`/transformations/${route.params.id}/complete`, {
+                completion_date: completionDate.value,
+            })
+        } else {
+            await api.post(`/transformations/${route.params.id}/request-completion`, {
+                completion_date: completionDate.value,
+            })
+        }
+        if (completionModal) completionModal.hide()
         reportsStore.invalidate('transformations')
         await refreshTransformation()
     } catch (err) {
-        completeError.value = err.response?.data?.detail || 'Failed to mark complete.'
+        const msg = err.response?.data?.detail || 'Failed to submit.'
+        completeError.value = msg
+        if (err.response?.status === 400) {
+            notificationStore.error(msg)
+        }
     } finally {
         completing.value = false
     }
@@ -827,7 +924,11 @@ async function saveOutput() {
         bsOutput.hide()
         await refreshTransformation()
     } catch (err) {
-        modalError.value = err.response?.data?.detail || 'Failed to add output.'
+        const msg = err.response?.data?.detail || 'Failed to add output.'
+        modalError.value = msg
+        if (err.response?.status === 400) {
+            notificationStore.error(msg)
+        }
     } finally {
         modalSaving.value = false
     }
@@ -916,6 +1017,49 @@ async function markPersonnelUnpaid(tpId) {
     } catch (err) {
         alert(err.response?.data?.detail || 'Failed to mark as unpaid.')
     }
+}
+
+async function requestPayment(tpId) {
+    try {
+        await api.post(`/transformations/${route.params.id}/personnel/${tpId}/request-payment`)
+        await refreshTransformation()
+    } catch (err) {
+        alert(err.response?.data?.detail || 'Failed to submit payment request.')
+    }
+}
+
+async function fetchTransformationApprovals() {
+    try {
+        const res = await api.get('/approvals/')
+        const tId = Number(route.params.id)
+        transformationApprovals.value = res.data.filter(a => {
+            if (a.status === 'RESOLVED') return false
+            return (a.payload || []).some(item =>
+                item.data?.transformation_id === tId && item.status === 'pending'
+            )
+        })
+    } catch (err) {
+        console.error('Failed to fetch approvals:', err)
+    }
+}
+
+function hasPendingPaymentApproval(tpId) {
+    return transformationApprovals.value.some(a =>
+        a.type === 'PERSONNEL_PAYMENT' &&
+        (a.payload || []).some(item =>
+            item.data?.personnel_assignment_id === tpId && item.status === 'pending'
+        )
+    )
+}
+
+function hasPendingCompletionApproval() {
+    return transformationApprovals.value.some(a => a.type === 'TRANSFORMATION_COMPLETION')
+}
+
+function pendingExpenseApprovalCount() {
+    return transformationApprovals.value
+        .filter(a => a.type === 'TRANSFORMATION_EXPENSE')
+        .reduce((sum, a) => sum + (a.payload || []).filter(i => i.status === 'pending').length, 0)
 }
 
 async function removePersonnel(tpId) {
@@ -1050,12 +1194,17 @@ async function saveExpense() {
     modalSaving.value = true
     modalError.value = ''
     try {
-        await api.post(`/transformations/${route.params.id}/expenses`, {
+        const payload = {
             category_id: expenseForm.value.category_id,
             amount: parseFloat(expenseForm.value.amount),
             date: expenseForm.value.date,
             description: expenseForm.value.description || null,
-        })
+        }
+        if (isAdmin.value) {
+            await api.post(`/transformations/${route.params.id}/expenses`, payload)
+        } else {
+            await api.post(`/transformations/${route.params.id}/expenses/request`, payload)
+        }
         reportsStore.invalidate('transformations')
         bsExpense.hide()
         await refreshTransformation()
@@ -1084,10 +1233,11 @@ onMounted(async () => {
         const res = await api.get('/batches/stages')
         stages.value = res.data
     } catch {}
+    await fetchTransformationApprovals()
 })
 
 onBeforeUnmount(() => {
-    [bsEdit, bsDelete, bsInput, bsOutput, bsPersonnel, bsVehicle, bsConsumable, bsExpense].forEach(m => m?.dispose())
+    [bsEdit, bsDelete, bsInput, bsOutput, bsPersonnel, bsVehicle, bsConsumable, bsExpense, completionModal].forEach(m => m?.dispose())
 })
 </script>
 
@@ -1209,6 +1359,19 @@ onBeforeUnmount(() => {
     margin-left: 6px;
 }
 
+.badge-pending-approval {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #fff3cd;
+    color: #856404;
+    border-radius: 12px;
+    border: 1px solid #ffc107;
+}
+
 .btn-icon-danger, .btn-icon-edit {
     width: 26px; height: 26px; border-radius: 6px; border: 1.5px solid var(--border);
     background: transparent; font-size: 0.82rem; cursor: pointer;
@@ -1253,5 +1416,9 @@ onBeforeUnmount(() => {
     .page-title { font-size: 1.3rem; }
     .header-actions { gap: 6px; }
     .form-row { grid-template-columns: 1fr; }
+}
+
+.waste-stage-option {
+    background-color: #fef2f0;
 }
 </style>

@@ -85,9 +85,9 @@
                             <input v-model="form.vehicle_type" type="text" class="form-control" placeholder="e.g. Tractor, Truck, Van" />
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Fuel Consumable (optional)</label>
-                            <select v-model="form.fuel_consumable_id" class="form-control form-select">
-                                <option :value="null">— None —</option>
+                            <label class="form-label">Fuel Consumable *</label>
+                            <select v-model="form.fuel_consumable_id" class="form-control form-select" required>
+                                <option :value="null" disabled>Select fuel consumable...</option>
                                 <option v-for="c in allConsumables" :key="c.id" :value="c.id">{{ c.name }} ({{ c.unit }})</option>
                             </select>
                         </div>
@@ -95,7 +95,7 @@
                     </div>
                     <div class="agri-modal-footer">
                         <button type="button" class="btn-modal-cancel" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn-modal-confirm" :disabled="!form.number.trim() || saving" @click="saveVehicle">
+                        <button type="button" class="btn-modal-confirm" :disabled="!form.number.trim() || !form.fuel_consumable_id || saving" @click="saveVehicle">
                             <span v-if="saving"><i class="bi bi-hourglass-split"></i></span>
                             <span v-else>{{ editingVehicle ? 'Save Changes' : 'Add Vehicle' }}</span>
                         </button>

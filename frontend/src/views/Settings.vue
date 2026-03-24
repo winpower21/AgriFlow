@@ -84,10 +84,23 @@
                         <input type="checkbox" v-model="newItem.is_salable" />
                         <span class="salable-label">Salable</span>
                     </label>
+                    <label v-if="isBatchStages" class="salable-toggle">
+                        <input type="checkbox" v-model="newItem.is_waste" />
+                        <span class="salable-label">Waste type</span>
+                    </label>
                     <label v-if="isTransformationTypes" class="salable-toggle">
                         <input type="checkbox" v-model="newItem.measures_personnel_efficiency" />
                         <span class="salable-label">Measures Efficiency</span>
                     </label>
+                    <label v-if="isTransformationTypes" class="salable-toggle">
+                        <input type="checkbox" v-model="newItem.is_root" />
+                        <span class="salable-label">Root (Harvest)</span>
+                    </label>
+                    <select v-if="isWageTypes" v-model="newItem.calculation_method" class="form-control form-select" style="max-width: 180px;">
+                        <option value="DAILY">Wage (Daily)</option>
+                        <option value="OUTPUT">Output (Per KG)</option>
+                        <option value="MONTHLY">Salary (Monthly)</option>
+                    </select>
                 </div>
                 <button
                     class="btn-add"
@@ -141,6 +154,8 @@
                                 {{ item.description }}
                             </span>
                             <span v-if="isTransformationTypes && item.measures_personnel_efficiency" class="salable-badge efficiency-badge">Efficiency</span>
+                            <span v-if="isTransformationTypes && item.is_root" class="salable-badge">Root</span>
+                            <span v-if="isWageTypes && item.calculation_method" class="salable-badge">{{ item.calculation_method }}</span>
                         </div>
                         <div class="item-actions">
                             <button
@@ -185,6 +200,15 @@
                                 <input type="checkbox" v-model="editForm.measures_personnel_efficiency" />
                                 <span class="salable-label">Measures Efficiency</span>
                             </label>
+                            <label v-if="isTransformationTypes" class="salable-toggle">
+                                <input type="checkbox" v-model="editForm.is_root" />
+                                <span class="salable-label">Root (Harvest)</span>
+                            </label>
+                            <select v-if="isWageTypes" v-model="editForm.calculation_method" class="form-control form-control-sm form-select" style="max-width: 180px;">
+                                <option value="DAILY">Wage (Daily)</option>
+                                <option value="OUTPUT">Output (Per KG)</option>
+                                <option value="MONTHLY">Salary (Monthly)</option>
+                            </select>
                         </div>
                         <div class="item-actions">
                             <button
@@ -377,6 +401,7 @@ const hasDescription = computed(() => {
 
 const isBatchStages = computed(() => activeTab.value === "batchStages");
 const isTransformationTypes = computed(() => activeTab.value === "transformationTypes");
+const isWageTypes = computed(() => activeTab.value === "wageTypes");
 
 // ── Data ────────────────────────────────────────────
 
@@ -444,7 +469,7 @@ function getRef(key) {
 
 // ── Add ─────────────────────────────────────────────
 
-const newItem = ref({ name: "", description: "", is_salable: false, measures_personnel_efficiency: true });
+const newItem = ref({ name: "", description: "", is_salable: false, is_waste: false, measures_personnel_efficiency: true, is_root: false, calculation_method: "DAILY" });
 
 async function handleAdd() {
     if (!newItem.value.name.trim()) return;
@@ -455,15 +480,20 @@ async function handleAdd() {
     }
     if (isBatchStages.value) {
         payload.is_salable = newItem.value.is_salable;
+        payload.is_waste = newItem.value.is_waste;
     }
     if (isTransformationTypes.value) {
         payload.measures_personnel_efficiency = newItem.value.measures_personnel_efficiency;
+        payload.is_root = newItem.value.is_root;
+    }
+    if (isWageTypes.value) {
+        payload.calculation_method = newItem.value.calculation_method;
     }
 
     try {
         const response = await api.post(getEndpoint(), payload);
         getRef().value.push(response.data);
-        newItem.value = { name: "", description: "", is_salable: false, measures_personnel_efficiency: true };
+        newItem.value = { name: "", description: "", is_salable: false, is_waste: false, measures_personnel_efficiency: true, is_root: false, calculation_method: "DAILY" };
     } catch (error) {
         console.error("Failed to add item:", error);
     }
@@ -472,7 +502,7 @@ async function handleAdd() {
 // ── Inline Edit ─────────────────────────────────────
 
 const editingId = ref(null);
-const editForm = ref({ name: "", description: "", is_salable: false, measures_personnel_efficiency: true });
+const editForm = ref({ name: "", description: "", is_salable: false, is_waste: false, measures_personnel_efficiency: true, is_root: false, calculation_method: "DAILY" });
 const editNameInput = ref(null);
 
 function startEdit(item) {
@@ -481,7 +511,10 @@ function startEdit(item) {
         name: item.name,
         description: item.description || "",
         is_salable: item.is_salable || false,
+        is_waste: item.is_waste || false,
         measures_personnel_efficiency: item.measures_personnel_efficiency ?? true,
+        is_root: item.is_root || false,
+        calculation_method: item.calculation_method || "DAILY",
     };
     nextTick(() => {
         const inputs = document.querySelectorAll(
@@ -493,7 +526,7 @@ function startEdit(item) {
 
 function cancelEdit() {
     editingId.value = null;
-    editForm.value = { name: "", description: "", is_salable: false, measures_personnel_efficiency: true };
+    editForm.value = { name: "", description: "", is_salable: false, is_waste: false, measures_personnel_efficiency: true, is_root: false, calculation_method: "DAILY" };
 }
 
 async function saveEdit() {
@@ -505,9 +538,14 @@ async function saveEdit() {
     }
     if (isBatchStages.value) {
         payload.is_salable = editForm.value.is_salable;
+        payload.is_waste = editForm.value.is_waste;
     }
     if (isTransformationTypes.value) {
         payload.measures_personnel_efficiency = editForm.value.measures_personnel_efficiency;
+        payload.is_root = editForm.value.is_root;
+    }
+    if (isWageTypes.value) {
+        payload.calculation_method = editForm.value.calculation_method;
     }
 
     try {
@@ -917,6 +955,10 @@ const StageTreeLevel = defineComponent({
                           node.is_salable
                               ? h("span", { class: "salable-badge" }, "Salable")
                               : null,
+                          // Waste badge
+                          node.is_waste
+                              ? h("span", { class: "salable-badge waste-badge" }, "Waste")
+                              : null,
                           // Spacer
                           h("span", { style: "flex:1" }),
                           // Actions
@@ -974,6 +1016,17 @@ const StageTreeLevel = defineComponent({
                                   },
                               }),
                               h("span", { class: "salable-label" }, "Salable"),
+                          ]),
+                          h("label", { class: "salable-toggle" }, [
+                              h("input", {
+                                  type: "checkbox",
+                                  checked: props.editForm.is_waste,
+                                  onChange: (ev) => {
+                                      props.editForm.is_waste =
+                                          ev.target.checked;
+                                  },
+                              }),
+                              h("span", { class: "salable-label" }, "Waste type"),
                           ]),
                           h("span", { style: "flex:1" }),
                           h("div", { class: "item-actions" }, [
@@ -1642,6 +1695,11 @@ onBeforeUnmount(() => {
 .efficiency-badge {
     background: rgba(91, 155, 213, 0.1);
     color: #5B9BD5;
+}
+
+.waste-badge {
+    background: rgba(181, 105, 77, 0.12);
+    color: var(--terracotta);
 }
 
 /* ── Picker Overlay & Popover ──────────────── */

@@ -69,6 +69,7 @@ class PersonnelService:
         phone: str | None = None,
         address: str | None = None,
         photo: str | None = None,
+        salary_payment_date: int | None = None,
     ) -> Personnel:
         """Create a new personnel record."""
         db_personnel = Personnel(
@@ -78,6 +79,7 @@ class PersonnelService:
             phone=phone,
             address=address,
             photo=photo,
+            salary_payment_date=salary_payment_date,
         )
         self.db.add(db_personnel)
         self.db.commit()
@@ -94,6 +96,7 @@ class PersonnelService:
         address: str | None = None,
         is_active: bool | None = None,
         photo: str | None = None,
+        salary_payment_date: int | None = None,
     ) -> Optional[Personnel]:
         """Update an existing personnel record (partial update).
 
@@ -110,6 +113,7 @@ class PersonnelService:
         if address is not None:       db_personnel.address = address
         if is_active is not None:     db_personnel.is_active = is_active
         if photo is not None:         db_personnel.photo = photo
+        if salary_payment_date is not None: db_personnel.salary_payment_date = salary_payment_date
 
         self.db.commit()
         self.db.refresh(db_personnel)
@@ -130,6 +134,111 @@ class PersonnelService:
         self.db.delete(db_personnel)
         self.db.commit()
         return True
+
+    def pay_salary(self, personnel_id: int) -> str | Personnel:
+        """Pay monthly salary for a personnel member. Creates a Labour expense."""
+        from ..models.expense import Expense, ExpenseCategory
+        from datetime import date, datetime, timedelta, timezone
+
+        person = self.get_by_id(personnel_id)
+        if not person:
+            return "not_found"
+
+        if not person.wage_type or person.wage_type.calculation_method != "MONTHLY":
+            return "not_monthly"
+
+        if not person.salary_payment_date:
+            return "no_payment_date"
+
+        today = date.today()
+        payment_day = person.salary_payment_date
+        if today.day >= payment_day:
+            cycle_start_date = today.replace(day=payment_day)
+        else:
+            first_of_month = today.replace(day=1)
+            prev_month = first_of_month - timedelta(days=1)
+            cycle_start_date = prev_month.replace(day=payment_day)
+
+        cycle_start = datetime.combine(cycle_start_date, datetime.min.time())
+
+        already_paid = self.db.query(Expense).filter(
+            Expense.personnel_id == personnel_id,
+            Expense.date >= cycle_start,
+        ).first()
+        if already_paid:
+            return "already_paid"
+
+        labour_cat = self.db.query(ExpenseCategory).filter(
+            ExpenseCategory.name == "Labour"
+        ).first()
+        if not labour_cat:
+            return "labour_category_missing"
+
+        expense = Expense(
+            date=datetime.now(timezone.utc),
+            amount=person.current_rate,
+            category_id=labour_cat.id,
+            personnel_id=personnel_id,
+            description=f"Monthly salary for {person.name}",
+        )
+        self.db.add(expense)
+        self.db.commit()
+        self.db.refresh(person)
+        return person
+
+    def get_pending_salaries(self) -> list[dict]:
+        """Return list of MONTHLY personnel with salary due within 5 days."""
+        from ..models.expense import Expense
+        from datetime import date, datetime, timedelta
+        from dateutil.relativedelta import relativedelta
+
+        today = date.today()
+        monthly_personnel = (
+            self.db.query(Personnel)
+            .join(Personnel.wage_type)
+            .filter(
+                WageType.calculation_method == "MONTHLY",
+                Personnel.is_active == True,
+                Personnel.salary_payment_date.isnot(None),
+            )
+            .all()
+        )
+
+        pending = []
+        for p in monthly_personnel:
+            payment_day = p.salary_payment_date
+            this_month_pd = today.replace(day=payment_day)
+
+            if today.day >= payment_day:
+                cycle_start = this_month_pd
+                next_pd = this_month_pd + relativedelta(months=1)
+            else:
+                prev = this_month_pd - relativedelta(months=1)
+                cycle_start = prev
+                next_pd = this_month_pd
+
+            days_until = (next_pd - today).days
+
+            if days_until > 5:
+                continue
+
+            cycle_start_dt = datetime.combine(cycle_start, datetime.min.time())
+            already_paid = self.db.query(Expense).filter(
+                Expense.personnel_id == p.id,
+                Expense.date >= cycle_start_dt,
+            ).first()
+            if already_paid:
+                continue
+
+            pending.append({
+                "personnel_id": p.id,
+                "personnel_name": p.name,
+                "salary_amount": float(p.current_rate),
+                "payment_due_date": str(next_pd),
+                "days_until_due": days_until,
+            })
+
+        return pending
 
     def get_wage_types(self) -> List[WageType]:
         """Get all wage types.

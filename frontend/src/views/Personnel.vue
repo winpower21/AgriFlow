@@ -9,7 +9,7 @@
                     {{ personnel.length === 1 ? "worker" : "workers" }}
                 </p>
             </div>
-            <button class="btn-add" @click="openAddModal">
+            <button v-if="isAdmin" class="btn-add" @click="openAddModal">
                 <i class="bi bi-plus-lg"></i>
                 <span>Add Personnel</span>
             </button>
@@ -26,7 +26,7 @@
                             <th>Rate</th>
                             <th>Phone</th>
                             <th>Status</th>
-                            <th class="th-actions">Actions</th>
+                            <th v-if="isAdmin" class="th-actions">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -53,6 +53,9 @@
                                         <span class="person-name">{{
                                             p.name
                                         }}</span>
+                                        <span v-if="isPendingSalary(p.id)" class="salary-due-dot" title="Salary due">
+                                            <i class="bi bi-circle-fill" style="color: #e74c3c; font-size: 8px;"></i>
+                                        </span>
                                         <span
                                             v-if="p.address"
                                             class="person-address"
@@ -95,8 +98,16 @@
                                     {{ p.is_active ? "Active" : "Inactive" }}
                                 </span>
                             </td>
-                            <td>
+                            <td v-if="isAdmin">
                                 <div class="action-group">
+                                    <button
+                                        v-if="isPendingSalary(p.id)"
+                                        class="btn-action btn-pay-salary"
+                                        title="Pay Salary"
+                                        @click="paySalary(p)"
+                                    >
+                                        <i class="bi bi-cash-coin"></i>
+                                    </button>
                                     <button
                                         class="btn-action btn-edit"
                                         title="Edit"
@@ -149,7 +160,12 @@
                             }}</template>
                         </span>
                         <div>
-                            <div class="person-name">{{ p.name }}</div>
+                            <div class="person-name">
+                                {{ p.name }}
+                                <span v-if="isPendingSalary(p.id)" class="salary-due-dot" title="Salary due">
+                                    <i class="bi bi-circle-fill" style="color: #e74c3c; font-size: 8px;"></i>
+                                </span>
+                            </div>
                             <div class="person-address" v-if="p.address">
                                 {{ p.address }}
                             </div>
@@ -190,7 +206,16 @@
                         <i class="bi bi-telephone"></i>
                         {{ p.phone }}
                     </div>
-                    <div class="action-group">
+                    <div v-if="isAdmin" class="action-group">
+                        <button
+                            v-if="isPendingSalary(p.id)"
+                            class="btn-action btn-pay-salary"
+                            title="Pay Salary"
+                            @click="paySalary(p)"
+                        >
+                            <i class="bi bi-cash-coin"></i>
+                            Pay Salary
+                        </button>
                         <button
                             class="btn-action btn-edit"
                             @click="openEditModal(p)"
@@ -335,8 +360,14 @@
                                     v-model="form.phone"
                                     type="tel"
                                     class="form-control"
-                                    placeholder="e.g. +91 98765 43210"
+                                    :class="{ 'is-invalid': phoneError }"
+                                    placeholder="e.g. 9876543210"
+                                    maxlength="10"
+                                    inputmode="numeric"
+                                    pattern="[1-9][0-9]{9}"
+                                    @input="validatePhone"
                                 />
+                                <div v-if="phoneError" class="invalid-feedback">{{ phoneError }}</div>
                             </div>
 
                             <!-- Address -->
@@ -351,6 +382,21 @@
                                     rows="2"
                                     placeholder="Village, district..."
                                 ></textarea>
+                            </div>
+
+                            <!-- Salary Payment Date (MONTHLY only) -->
+                            <div v-if="selectedWageType?.calculation_method === 'MONTHLY'" class="form-group">
+                                <label class="form-label" for="pPayDate">Salary Payment Date (Day of Month) *</label>
+                                <input
+                                    id="pPayDate"
+                                    v-model.number="form.salary_payment_date"
+                                    type="number"
+                                    class="form-control"
+                                    min="1"
+                                    max="28"
+                                    placeholder="e.g. 1 (1st of month)"
+                                />
+                                <small class="form-text text-muted">Day 1-28 when monthly salary is due</small>
                             </div>
 
                             <!-- Active toggle (edit only) -->
@@ -439,6 +485,10 @@ import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import { Modal } from "bootstrap";
 import api from "../utils/api";
 import { useReportsStore } from "@/stores/reports";
+import { useAuthStore } from "@/stores/auth";
+
+const auth = useAuthStore();
+const isAdmin = computed(() => auth.userRoles?.includes("admin"));
 
 const reportsStore = useReportsStore();
 
@@ -467,6 +517,7 @@ function getEmptyForm() {
         phone: "",
         address: "",
         is_active: true,
+        salary_payment_date: null,
         photoFile: null, // File object from picker
         photoPreview: null, // object URL for local preview
     };
@@ -482,6 +533,63 @@ const isFormValid = computed(() => {
         form.value.current_rate >= 0
     );
 });
+
+const phoneError = ref('')
+
+function validatePhone() {
+    const p = form.value.phone
+    if (!p) {
+        phoneError.value = ''
+        return true
+    }
+    if (!/^\d+$/.test(p)) {
+        phoneError.value = 'Phone must contain only digits'
+        return false
+    }
+    if (p.startsWith('0')) {
+        phoneError.value = 'Phone must not start with 0'
+        return false
+    }
+    if (p.length !== 10) {
+        phoneError.value = 'Phone must be exactly 10 digits'
+        return false
+    }
+    phoneError.value = ''
+    return true
+}
+
+const selectedWageType = computed(() => {
+    return wageTypes.value.find(w => w.id === form.value.wage_type_id) || null
+})
+
+const pendingSalaries = ref([])
+
+async function fetchPendingSalaries() {
+    try {
+        const res = await api.get('/personnel/pending-salaries')
+        pendingSalaries.value = res.data
+    } catch (e) {
+        console.error('Failed to fetch pending salaries:', e)
+    }
+}
+
+function isPendingSalary(personnelId) {
+    return pendingSalaries.value.some(ps => ps.personnel_id === personnelId)
+}
+
+function getPendingSalaryInfo(personnelId) {
+    return pendingSalaries.value.find(ps => ps.personnel_id === personnelId)
+}
+
+async function paySalary(p) {
+    if (!confirm(`Pay monthly salary of ₹${p.current_rate} to ${p.name}?`)) return
+    try {
+        await api.post(`/personnel/${p.id}/pay-salary`)
+        await fetchPendingSalaries()
+    } catch (e) {
+        alert(e.response?.data?.detail || 'Failed to pay salary')
+    }
+}
 
 // ── Helpers ─────────────────────────────────────────
 
@@ -555,6 +663,7 @@ function openEditModal(p) {
         phone: p.phone || "",
         address: p.address || "",
         is_active: p.is_active,
+        salary_payment_date: p.salary_payment_date || null,
         photoFile: null,
         photoPreview: p.photo ? photoUrl(p.photo) : null,
     };
@@ -590,6 +699,7 @@ async function fetchWageTypes() {
 
 async function handleFormSubmit() {
     if (!isFormValid.value) return;
+    if (form.value.phone && !validatePhone()) return;
 
     if (isEditing.value) {
         await updatePersonnel(editingId.value, { ...form.value });
@@ -607,6 +717,7 @@ async function addPersonnel(data) {
         fd.append("current_rate", data.current_rate);
         if (data.phone) fd.append("phone", data.phone);
         if (data.address) fd.append("address", data.address);
+        if (data.salary_payment_date != null) fd.append("salary_payment_date", data.salary_payment_date);
         if (data.photoFile) fd.append("photo", data.photoFile);
 
         const response = await api.post("/personnel/", fd);
@@ -629,6 +740,7 @@ async function updatePersonnel(id, data) {
         if (data.address !== undefined) fd.append("address", data.address);
         if (data.is_active !== undefined)
             fd.append("is_active", data.is_active);
+        if (data.salary_payment_date != null) fd.append("salary_payment_date", data.salary_payment_date);
         if (data.photoFile) fd.append("photo", data.photoFile);
 
         const response = await api.put(`/personnel/${id}`, fd);
@@ -659,7 +771,7 @@ async function deletePersonnel(id) {
 // ── Lifecycle ───────────────────────────────────────
 
 onMounted(async () => {
-    await Promise.all([fetchPersonnel(), fetchWageTypes()]);
+    await Promise.all([fetchPersonnel(), fetchWageTypes(), fetchPendingSalaries()]);
     loading.value = false;
 });
 
@@ -952,6 +1064,30 @@ onBeforeUnmount(() => {
     border-color: var(--sienna);
     color: var(--sienna);
     background: rgba(181, 105, 77, 0.06);
+}
+
+.btn-pay-salary {
+    border-color: #e74c3c;
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.06);
+}
+
+.btn-pay-salary:hover:not(:disabled) {
+    border-color: #c0392b;
+    color: #c0392b;
+    background: rgba(231, 76, 60, 0.12);
+}
+
+.salary-due-dot {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
 }
 
 .btn-action:disabled {

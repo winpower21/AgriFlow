@@ -30,294 +30,14 @@
         </div>
 
         <!-- ══════════════════════════════════════════════ -->
-        <!-- ADMIN: PENDING APPROVALS PANEL                 -->
+        <!-- ADMIN: PENDING APPROVALS BANNER               -->
         <!-- ══════════════════════════════════════════════ -->
-        <div
-            v-if="isAdmin && pendingApprovals.length > 0"
-            class="approvals-panel animate-fade-in-up animate-delay-1"
-        >
-            <div class="approvals-panel-header">
-                <i class="bi bi-hourglass-split"></i>
-                <span>Pending Approvals</span>
-                <span class="approvals-count">{{
-                    pendingApprovals.length
-                }}</span>
-            </div>
-
-            <div
-                v-for="req in pendingApprovals"
-                :key="req.id"
-                class="approval-card"
-            >
-                <div
-                    class="approval-card-header"
-                    @click="toggleExpanded(req.id)"
-                >
-                    <div class="approval-meta">
-                        <span class="approval-submitter">
-                            <i class="bi bi-person"></i>
-                            {{
-                                req.submitted_by_email ||
-                                req.submitted_by ||
-                                "Unknown"
-                            }}
-                        </span>
-                        <span class="approval-date">
-                            <i class="bi bi-calendar3"></i>
-                            {{ formatDate(req.created_at) }}
-                        </span>
-                        <span class="approval-items-count">
-                            {{ req.items?.length || 0 }} item{{
-                                (req.items?.length || 0) !== 1 ? "s" : ""
-                            }}
-                        </span>
-                    </div>
-                    <div class="approval-card-right">
-                        <span
-                            class="status-chip"
-                            :class="statusChipClass(req.status)"
-                        >
-                            {{ req.status }}
-                        </span>
-                        <button
-                            class="btn-approve-all"
-                            @click.stop="approveAll(req.id)"
-                        >
-                            <i class="bi bi-check-all"></i>
-                            Approve All
-                        </button>
-                        <i
-                            class="bi expand-chevron"
-                            :class="
-                                expandedRequests.has(req.id)
-                                    ? 'bi-chevron-up'
-                                    : 'bi-chevron-down'
-                            "
-                        ></i>
-                    </div>
-                </div>
-
-                <div v-if="expandedRequests.has(req.id)" class="approval-items">
-                    <div
-                        v-for="(item, idx) in req.items"
-                        :key="idx"
-                        class="approval-item-row"
-                        :class="`item-status-${(item.status || 'pending').toLowerCase()}`"
-                    >
-                        <!-- Normal view -->
-                        <template
-                            v-if="
-                                !(
-                                    editingApprovalItem &&
-                                    editingApprovalItem.requestId === req.id &&
-                                    editingApprovalItem.index === idx
-                                )
-                            "
-                        >
-                            <div class="approval-item-info">
-                                <span class="approval-item-date dimmed">
-                                    {{ formatDate(item.data?.date) }}
-                                </span>
-                                <span class="approval-item-amount">
-                                    ₹{{ formatMoney(item.data?.amount) }}
-                                </span>
-                                <span class="approval-item-category">
-                                    {{ categoryName(item.data?.category_id) }}
-                                </span>
-                                <span
-                                    v-if="item.data?.description"
-                                    class="approval-item-detail dimmed"
-                                >
-                                    {{ item.data.description }}
-                                </span>
-                                <span
-                                    v-if="item.data?.plantation_id"
-                                    class="approval-item-tag tag-plantation"
-                                >
-                                    <i class="bi bi-geo-alt"></i>
-                                    {{
-                                        plantationName(item.data.plantation_id)
-                                    }}
-                                </span>
-                                <span
-                                    v-if="item.data?.vehicle_id"
-                                    class="approval-item-tag tag-vehicle"
-                                >
-                                    <i class="bi bi-truck"></i>
-                                    {{ vehicleNumber(item.data.vehicle_id) }}
-                                </span>
-                                <span
-                                    v-if="
-                                        item.status && item.status !== 'PENDING'
-                                    "
-                                    class="status-chip status-chip-sm"
-                                    :class="statusChipClass(item.status)"
-                                >
-                                    {{ item.status }}
-                                </span>
-                            </div>
-                            <div
-                                v-if="item.status === 'PENDING' || !item.status"
-                                class="approval-item-actions"
-                            >
-                                <button
-                                    class="btn-action-sm btn-approve"
-                                    @click="approveItem(req.id, idx)"
-                                >
-                                    <i class="bi bi-check-lg"></i>
-                                    Approve
-                                </button>
-                                <button
-                                    class="btn-action-sm btn-edit-approval"
-                                    @click="
-                                        startEditApproval(
-                                            req.id,
-                                            idx,
-                                            item.data,
-                                        )
-                                    "
-                                >
-                                    <i class="bi bi-pencil"></i>
-                                    Edit &amp; Approve
-                                </button>
-                                <button
-                                    class="btn-action-sm btn-reject"
-                                    @click="promptReject(req.id, idx)"
-                                >
-                                    <i class="bi bi-x-lg"></i>
-                                    Reject
-                                </button>
-                            </div>
-                        </template>
-
-                        <!-- Edit & Approve inline form -->
-                        <template v-else>
-                            <div class="approval-edit-form">
-                                <div class="approval-edit-fields">
-                                    <div class="ae-field">
-                                        <label class="ae-label">Date</label>
-                                        <input
-                                            v-model="
-                                                editingApprovalItem.data.date
-                                            "
-                                            type="date"
-                                            class="form-control form-control-sm"
-                                        />
-                                    </div>
-                                    <div class="ae-field">
-                                        <label class="ae-label"
-                                            >Amount (₹)</label
-                                        >
-                                        <input
-                                            v-model="
-                                                editingApprovalItem.data.amount
-                                            "
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            class="form-control form-control-sm"
-                                            placeholder="0.00"
-                                        />
-                                    </div>
-                                    <div class="ae-field">
-                                        <label class="ae-label">Category</label>
-                                        <select
-                                            v-model="
-                                                editingApprovalItem.data
-                                                    .category_id
-                                            "
-                                            class="form-select form-select-sm"
-                                        >
-                                            <option :value="null" disabled>
-                                                Select
-                                            </option>
-                                            <option
-                                                v-for="cat in categories"
-                                                :key="cat.id"
-                                                :value="cat.id"
-                                            >
-                                                {{ cat.name }}
-                                            </option>
-                                        </select>
-                                    </div>
-                                    <div class="ae-field">
-                                        <label class="ae-label"
-                                            >Plantation</label
-                                        >
-                                        <select
-                                            v-model="
-                                                editingApprovalItem.data
-                                                    .plantation_id
-                                            "
-                                            class="form-select form-select-sm"
-                                        >
-                                            <option :value="null">None</option>
-                                            <option
-                                                v-for="pl in plantations"
-                                                :key="pl.id"
-                                                :value="pl.id"
-                                            >
-                                                {{ pl.name }}
-                                            </option>
-                                        </select>
-                                    </div>
-                                    <div class="ae-field">
-                                        <label class="ae-label">Vehicle</label>
-                                        <select
-                                            v-model="
-                                                editingApprovalItem.data
-                                                    .vehicle_id
-                                            "
-                                            class="form-select form-select-sm"
-                                        >
-                                            <option :value="null">None</option>
-                                            <option
-                                                v-for="veh in vehicles"
-                                                :key="veh.id"
-                                                :value="veh.id"
-                                            >
-                                                {{ veh.number }}
-                                            </option>
-                                        </select>
-                                    </div>
-                                    <div class="ae-field ae-field-wide">
-                                        <label class="ae-label"
-                                            >Description</label
-                                        >
-                                        <input
-                                            v-model="
-                                                editingApprovalItem.data
-                                                    .description
-                                            "
-                                            type="text"
-                                            class="form-control form-control-sm"
-                                            placeholder="Optional"
-                                        />
-                                    </div>
-                                </div>
-                                <div class="approval-edit-btns">
-                                    <button
-                                        class="btn-action-sm btn-approve"
-                                        @click="
-                                            submitApproveWithEdits(req.id, idx)
-                                        "
-                                    >
-                                        <i class="bi bi-check-lg"></i>
-                                        Save &amp; Approve
-                                    </button>
-                                    <button
-                                        class="btn-action-sm btn-cancel-edit"
-                                        @click="cancelEditApproval"
-                                    >
-                                        <i class="bi bi-x-lg"></i>
-                                        Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-            </div>
+        <div v-if="isAdmin && pendingApprovalCount > 0" class="approval-banner">
+            <i class="bi bi-exclamation-triangle"></i>
+            {{ pendingApprovalCount }} pending expense approval{{ pendingApprovalCount !== 1 ? 's' : '' }}
+            <router-link :to="{ name: 'approvals', query: { type: 'EXPENSE' } }" class="banner-link">
+                View in Approvals <i class="bi bi-arrow-right"></i>
+            </router-link>
         </div>
 
         <!-- ══════════════════════════════════════════════ -->
@@ -536,8 +256,8 @@
                             {{ formatDate(req.created_at) }}
                         </span>
                         <span class="my-request-count">
-                            {{ req.items?.length || 0 }} item{{
-                                (req.items?.length || 0) !== 1 ? "s" : ""
+                            {{ req.payload?.length || 0 }} item{{
+                                (req.payload?.length || 0) !== 1 ? "s" : ""
                             }}
                         </span>
                     </div>
@@ -551,7 +271,7 @@
 
                 <div class="my-request-items">
                     <div
-                        v-for="(item, idx) in req.items"
+                        v-for="(item, idx) in req.payload"
                         :key="idx"
                         class="my-request-item"
                     >
@@ -997,50 +717,6 @@
             </div>
         </div>
 
-        <!-- Reject Item Modal -->
-        <div
-            class="modal fade"
-            id="rejectExpenseModal"
-            tabindex="-1"
-            aria-hidden="true"
-            ref="rejectModalRef"
-        >
-            <div class="modal-dialog modal-dialog-centered modal-sm">
-                <div class="modal-content confirm-modal">
-                    <div class="modal-body">
-                        <div class="modal-icon icon-delete">
-                            <i class="bi bi-x-circle"></i>
-                        </div>
-                        <h5 class="modal-title">Reject Item</h5>
-                        <p class="modal-desc">
-                            Provide a reason for rejection (optional).
-                        </p>
-                        <textarea
-                            v-model="rejectNote"
-                            class="form-control mt-2"
-                            rows="2"
-                            placeholder="Rejection note..."
-                        ></textarea>
-                    </div>
-                    <div class="modal-footer">
-                        <button
-                            type="button"
-                            class="btn-modal btn-modal-cancel"
-                            data-bs-dismiss="modal"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            class="btn-modal btn-modal-confirm btn-modal-danger"
-                            @click="confirmReject"
-                        >
-                            Reject
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </template>
 
@@ -1147,19 +823,11 @@ const isRequestFormValid = computed(() => {
     );
 });
 
-// ── Approval state ────────────────────────────────────
-const expandedRequests = ref(new Set());
-const editingApprovalItem = ref(null); // { requestId, index, data }
-const rejectTarget = ref(null); // { requestId, index }
-const rejectNote = ref("");
-const rejectModalRef = ref(null);
-let bsRejectModal = null;
-
 // ── Computed ─────────────────────────────────────────
-const pendingApprovals = computed(() =>
+const pendingApprovalCount = computed(() =>
     approvals.value.filter(
-        (a) => a.status === "PENDING" || a.status === "PARTIAL",
-    ),
+        (a) => a.type === 'EXPENSE' && (a.status === 'PENDING' || a.status === 'PARTIAL'),
+    ).length
 );
 
 const myRequests = computed(() => approvals.value);
@@ -1443,107 +1111,6 @@ async function submitRequest() {
     }
 }
 
-// ── Approval Actions ─────────────────────────────────
-function toggleExpanded(requestId) {
-    const s = new Set(expandedRequests.value);
-    if (s.has(requestId)) {
-        s.delete(requestId);
-    } else {
-        s.add(requestId);
-    }
-    expandedRequests.value = s;
-}
-
-async function approveItem(requestId, index) {
-    try {
-        await api.patch(`/approvals/${requestId}/items/${index}`, {
-            action: "approve",
-        });
-        reportsStore.invalidate('expenses');
-        await fetchApprovals();
-        await fetchExpenses();
-    } catch (err) {
-        console.error("Failed to approve item:", err);
-    }
-}
-
-function startEditApproval(requestId, index, data) {
-    editingApprovalItem.value = {
-        requestId,
-        index,
-        data: {
-            date: data?.date ? data.date.slice(0, 10) : "",
-            amount: data?.amount ?? "",
-            category_id: data?.category_id ?? null,
-            plantation_id: data?.plantation_id ?? null,
-            vehicle_id: data?.vehicle_id ?? null,
-            description: data?.description ?? "",
-        },
-    };
-}
-
-function cancelEditApproval() {
-    editingApprovalItem.value = null;
-}
-
-async function submitApproveWithEdits(requestId, index) {
-    if (!editingApprovalItem.value) return;
-    const { data } = editingApprovalItem.value;
-    try {
-        await api.patch(`/approvals/${requestId}/items/${index}`, {
-            action: "approve_with_edits",
-            modified_data: {
-                date: data.date ? new Date(data.date).toISOString() : null,
-                amount: String(data.amount),
-                category_id: data.category_id,
-                plantation_id: data.plantation_id || null,
-                vehicle_id: data.vehicle_id || null,
-                description: data.description?.trim() || null,
-            },
-        });
-        editingApprovalItem.value = null;
-        reportsStore.invalidate('expenses');
-        await fetchApprovals();
-        await fetchExpenses();
-    } catch (err) {
-        console.error("Failed to approve with edits:", err);
-    }
-}
-
-function promptReject(requestId, index) {
-    rejectTarget.value = { requestId, index };
-    rejectNote.value = "";
-    if (!bsRejectModal) bsRejectModal = new Modal(rejectModalRef.value);
-    bsRejectModal.show();
-}
-
-async function confirmReject() {
-    if (!rejectTarget.value) return;
-    const { requestId, index } = rejectTarget.value;
-    try {
-        await api.patch(`/approvals/${requestId}/items/${index}`, {
-            action: "reject",
-            rejection_note: rejectNote.value.trim() || null,
-        });
-        reportsStore.invalidate('expenses');
-        bsRejectModal.hide();
-        await fetchApprovals();
-    } catch (err) {
-        console.error("Failed to reject item:", err);
-    }
-}
-
-async function approveAll(requestId) {
-    try {
-        await api.post(`/approvals/${requestId}/approve-all`);
-        reportsStore.invalidate('expenses');
-        await fetchApprovals();
-        await fetchExpenses();
-    } catch (err) {
-        console.error("Failed to approve all:", err);
-    }
-}
-
 // ── Lifecycle ────────────────────────────────────────
 onMounted(async () => {
     document.addEventListener("click", onDocumentClick, true);
@@ -1556,7 +1123,6 @@ onBeforeUnmount(() => {
     bsExpenseModal?.dispose();
     bsDeleteModal?.dispose();
     bsRequestModal?.dispose();
-    bsRejectModal?.dispose();
 });
 </script>
 
@@ -1976,324 +1542,27 @@ onBeforeUnmount(() => {
     margin: 0;
 }
 
-/* ── Approvals Panel ──────────────────────────────── */
-.approvals-panel {
-    background: var(--bg-card);
-    border: 1.5px solid rgba(196, 163, 90, 0.3);
-    border-radius: 14px;
-    box-shadow: var(--shadow-sm);
-    overflow: hidden;
-    margin-bottom: 20px;
-}
-
-.approvals-panel-header {
+/* ── Approval Banner ──────────────────────────────── */
+.approval-banner {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 14px 18px;
-    background: rgba(196, 163, 90, 0.06);
-    border-bottom: 1px solid rgba(196, 163, 90, 0.2);
-    font-size: 0.85rem;
-    font-weight: 700;
-    color: #8a6f2a;
-    letter-spacing: 0.01em;
-}
-
-.approvals-panel-header i {
-    font-size: 1rem;
-}
-
-.approvals-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 11px;
-    background: rgba(196, 163, 90, 0.18);
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: #8a6f2a;
-}
-
-.approval-card {
-    border-bottom: 1px solid var(--border-light);
-}
-
-.approval-card:last-child {
-    border-bottom: none;
-}
-
-.approval-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 18px;
-    cursor: pointer;
-    transition: background var(--transition-fast);
-}
-
-.approval-card-header:hover {
-    background: rgba(138, 154, 123, 0.04);
-}
-
-.approval-meta {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    flex-wrap: wrap;
-}
-
-.approval-submitter,
-.approval-date,
-.approval-items-count {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.82rem;
-    color: var(--text-secondary);
-}
-
-.approval-submitter {
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.approval-submitter i,
-.approval-date i {
-    font-size: 0.78rem;
-    color: var(--text-secondary);
-}
-
-.approval-card-right {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-shrink: 0;
-}
-
-.expand-chevron {
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    transition: transform var(--transition-fast);
-}
-
-.btn-approve-all {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border: 1.5px solid var(--moss);
+    padding: 10px 16px;
+    background: var(--amber-light, #fff8e1);
+    border: 1px solid var(--amber, #ffc107);
     border-radius: 8px;
-    background: transparent;
-    color: var(--moss);
-    font-family: var(--font-body);
-    font-size: 0.78rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-}
-
-.btn-approve-all:hover {
-    background: rgba(74, 103, 65, 0.08);
-}
-
-.approval-items {
-    border-top: 1px solid var(--border-light);
-    background: var(--parchment-deep);
-}
-
-.approval-item-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 12px 18px;
-    border-bottom: 1px solid var(--border-light);
-    transition: background var(--transition-fast);
-}
-
-.approval-item-row:last-child {
-    border-bottom: none;
-}
-
-.approval-item-row.item-status-approved {
-    background: rgba(74, 103, 65, 0.04);
-}
-
-.approval-item-row.item-status-rejected {
-    background: rgba(181, 105, 77, 0.04);
-}
-
-.approval-item-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-    flex: 1;
-    min-width: 0;
-}
-
-.approval-item-date {
-    font-size: 0.78rem;
-    color: var(--text-secondary);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-
-.approval-item-date.dimmed {
-    opacity: 0.7;
-}
-
-.approval-item-amount {
-    font-weight: 700;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     color: var(--text-primary);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
+    margin-bottom: 16px;
 }
-
-.approval-item-category {
-    display: inline-flex;
-    align-items: center;
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 20px;
-    background: rgba(196, 163, 90, 0.14);
-    color: #8a6f2a;
-    white-space: nowrap;
-}
-
-.approval-item-detail {
-    font-size: 0.78rem;
-    color: var(--text-secondary);
-    font-variant-numeric: tabular-nums;
-}
-
-.approval-item-detail.dimmed {
-    opacity: 0.7;
-}
-
-.approval-item-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 20px;
-    white-space: nowrap;
-}
-
-.approval-item-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-}
-
-.btn-action-sm {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 12px;
-    border: 1.5px solid var(--border);
-    border-radius: 7px;
-    background: transparent;
-    color: var(--text-secondary);
-    font-family: var(--font-body);
-    font-size: 0.76rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-    white-space: nowrap;
-}
-
-.btn-action-sm i {
-    font-size: 0.78rem;
-}
-
-.btn-approve {
-    border-color: var(--moss);
+.approval-banner i { color: var(--amber, #ffc107); }
+.banner-link {
+    margin-left: auto;
     color: var(--moss);
-}
-
-.btn-approve:hover {
-    background: rgba(74, 103, 65, 0.08);
-}
-
-.btn-edit-approval {
-    border-color: var(--harvest);
-    color: #8a6f2a;
-}
-
-.btn-edit-approval:hover {
-    background: rgba(196, 163, 90, 0.08);
-}
-
-.btn-reject {
-    border-color: var(--sienna);
-    color: var(--sienna);
-}
-
-.btn-reject:hover {
-    background: rgba(181, 105, 77, 0.06);
-}
-
-.btn-cancel-edit {
-    border-color: var(--border);
-    color: var(--text-secondary);
-}
-
-.btn-cancel-edit:hover {
-    border-color: var(--sienna);
-    color: var(--sienna);
-}
-
-/* ── Approval Edit Inline Form ────────────────────── */
-.approval-edit-form {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.approval-edit-fields {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    align-items: flex-end;
-}
-
-.ae-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 110px;
-    flex: 1;
-}
-
-.ae-field-wide {
-    min-width: 180px;
-    flex: 2;
-}
-
-.ae-label {
-    font-size: 0.7rem;
     font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    text-decoration: none;
 }
-
-.approval-edit-btns {
-    display: flex;
-    gap: 8px;
-}
+.banner-link:hover { text-decoration: underline; }
 
 /* ── My Requests Panel ────────────────────────────── */
 .my-requests-panel {
@@ -2770,37 +2039,6 @@ onBeforeUnmount(() => {
         margin-left: auto;
     }
 
-    .approval-card-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-    }
-
-    .approval-card-right {
-        align-self: flex-end;
-    }
-
-    .approval-item-row {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-    }
-
-    .approval-item-actions {
-        align-self: flex-end;
-    }
-
-    .approval-edit-fields {
-        flex-direction: column;
-    }
-
-    .ae-field,
-    .ae-field-wide {
-        min-width: 0;
-        flex: none;
-        width: 100%;
-    }
-
     .form-row {
         flex-direction: column;
         gap: 0;
@@ -2813,16 +2051,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 575.98px) {
-    .approval-card-right {
-        flex-wrap: wrap;
-        justify-content: flex-end;
-    }
-
-    .btn-action-sm {
-        font-size: 0.7rem;
-        padding: 5px 10px;
-    }
-
     .expense-description {
         display: none;
     }

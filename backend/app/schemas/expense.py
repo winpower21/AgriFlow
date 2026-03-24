@@ -31,6 +31,7 @@ class ExpenseCreate(BaseModel):
     category_id: int
     plantation_id: Optional[int] = None
     vehicle_id: Optional[int] = None
+    transformation_id: Optional[int] = None
     description: Optional[str] = None
 
 
@@ -40,6 +41,7 @@ class ExpenseUpdate(BaseModel):
     category_id: Optional[int] = None
     plantation_id: Optional[int] = None
     vehicle_id: Optional[int] = None
+    transformation_id: Optional[int] = None
     description: Optional[str] = None
 
 
@@ -56,6 +58,7 @@ class ExpenseSchema(BaseModel):
     category_id: int
     plantation_id: Optional[int] = None
     vehicle_id: Optional[int] = None
+    transformation_id: Optional[int] = None
     description: Optional[str] = None
     created_at: datetime
     updated_at: datetime

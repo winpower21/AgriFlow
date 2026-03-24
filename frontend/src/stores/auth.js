@@ -24,10 +24,10 @@ export const useAuthStore = defineStore("auth", () => {
   function setAuth(tokenValue, userData) {
     token.value = tokenValue;
     user.value = userData;
-    userRoles.value = userData.role;
+    userRoles.value = Array.isArray(userData.role) ? userData.role : [userData.role];
     localStorage.setItem("token", tokenValue);
     localStorage.setItem("user", JSON.stringify(userData));
-    localStorage.setItem("userRoles", JSON.stringify(userData.role));
+    localStorage.setItem("userRoles", JSON.stringify(userRoles.value));
   }
 
   function logout() {

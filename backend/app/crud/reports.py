@@ -74,6 +74,9 @@ class ReportsService:
         if is_depleted is not None:
             filters.append(Batch.is_depleted == is_depleted)
 
+        # Exclude waste batches from analytics
+        filters.append(BatchStage.is_waste == False)  # noqa: E712
+
         # KPIs
         kpi = self.db.query(
             func.count(Batch.id).label("total"),
@@ -82,7 +85,7 @@ class ReportsService:
             ), 0).label("avg_cpk"),
             func.coalesce(func.sum(Batch.initial_weight_kg), 0).label("total_wt"),
             func.count(case((Batch.is_depleted == True, Batch.id))).label("depleted"),  # noqa: E712
-        ).filter(*filters).first()
+        ).join(BatchStage, Batch.stage_id == BatchStage.id).filter(*filters).first()
 
         kpis = {
             "total_batches": kpi.total or 0,
@@ -116,6 +119,7 @@ class ReportsService:
                 period_expr.label("period"),
                 func.avg(Batch.cost_per_kg).label("avg_cpk"),
             )
+            .join(BatchStage, Batch.stage_id == BatchStage.id)
             .filter(*filters, Batch.cost_per_kg.isnot(None))
             .group_by(period_expr)
             .order_by(period_expr)
@@ -129,6 +133,7 @@ class ReportsService:
         # Top 10 cost contributors with breakdown
         top_batches = (
             self.db.query(Batch)
+            .join(BatchStage, Batch.stage_id == BatchStage.id)
             .filter(*filters, Batch.cost_per_kg.isnot(None))
             .order_by(Batch.cost_per_kg.desc())
             .limit(10)
@@ -159,7 +164,7 @@ class ReportsService:
             .first()
         )
         if not t_output:
-            return {"input_cost": 0.0, "labor_cost": 0.0, "consumable_cost": 0.0, "vehicle_cost": 0.0}
+            return {"input_cost": 0.0, "labor_cost": 0.0, "consumable_cost": 0.0, "vehicle_cost": 0.0, "expense_cost": 0.0}
 
         t_id = t_output.transformation_id
 
@@ -168,15 +173,33 @@ class ReportsService:
             func.coalesce(func.sum(TransformationPersonnel.total_wages_payable), 0)
         ).filter(TransformationPersonnel.transformation_id == t_id).scalar()
 
-        # Consumable cost
+        # Consumable cost (exclude vehicle fuel — already counted in vehicle cost)
         consumable = self.db.query(
             func.coalesce(func.sum(ConsumableConsumption.total_cost), 0)
-        ).filter(ConsumableConsumption.transformation_id == t_id).scalar()
+        ).filter(
+            ConsumableConsumption.transformation_id == t_id,
+            ConsumableConsumption.is_vehicle_fuel == False,
+        ).scalar()
 
         # Vehicle cost (hours_used * cost_per_hour is not available; use fuel_cost)
         vehicle = self.db.query(
             func.coalesce(func.sum(TransformationVehicle.fuel_cost), 0)
         ).filter(TransformationVehicle.transformation_id == t_id).scalar()
+
+        # Other expenses (exclude personnel wage expenses — already counted in labor)
+        personnel_expense_ids = (
+            self.db.query(TransformationPersonnel.expense_id)
+            .filter(
+                TransformationPersonnel.transformation_id == t_id,
+                TransformationPersonnel.expense_id.isnot(None),
+            )
+        )
+        expense = self.db.query(
+            func.coalesce(func.sum(Expense.amount), 0)
+        ).filter(
+            Expense.transformation_id == t_id,
+            ~Expense.id.in_(personnel_expense_ids),
+        ).scalar()
 
         # Input cost: sum of (input batch cost_per_kg * input_weight) for all inputs
         input_rows = (
@@ -199,6 +222,7 @@ class ReportsService:
             "labor_cost": float(labor),
             "consumable_cost": float(consumable),
             "vehicle_cost": float(vehicle),
+            "expense_cost": float(expense),
         }
 
     # -----------------------------------------------------------------------

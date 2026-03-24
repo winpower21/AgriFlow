@@ -86,13 +86,22 @@ async def lifespan(app: FastAPI):
     try:
         roles_exist = db.query(Role).count() > 0
         if not roles_exist:
-            # Seed the three default roles used by the RBAC system
             db.add(Role(name="admin", description="Administrator with full access"))
             db.add(Role(name="manager", description="Manager with limited access"))
-            db.add(Role(name="user", description="Regular user with basic access"))
             db.commit()
             print("Base roles created.")
         else:
+            # Clean up orphaned "user" role if it exists with no users assigned
+            from .models.user import user_roles as user_roles_table
+            user_role = db.query(Role).filter(Role.name == "user").first()
+            if user_role:
+                assigned_count = db.query(user_roles_table).filter(
+                    user_roles_table.c.role_id == user_role.id
+                ).count()
+                if assigned_count == 0:
+                    db.delete(user_role)
+                    db.commit()
+                    print("Orphaned 'user' role removed.")
             print("Base roles already exist, skipping creation.")
     except Exception as e:
         print(f"Error during role creation: {e}")
@@ -147,6 +156,31 @@ async def lifespan(app: FastAPI):
             print("Lease Cost expense category already exists.")
     except Exception as e:
         print(f"Error seeding Lease Cost category: {e}")
+
+    # ── Seed default wage types ─────────────────────────────────────
+    from .models.personnel import WageType
+
+    try:
+        default_wage_types = [
+            {"name": "Wage (Daily)", "calculation_method": "DAILY"},
+            {"name": "Output (Per KG)", "calculation_method": "OUTPUT"},
+            {"name": "Salary (Monthly)", "calculation_method": "MONTHLY"},
+        ]
+
+        for wt_data in default_wage_types:
+            existing = (
+                db.query(WageType)
+                .filter(WageType.calculation_method == wt_data["calculation_method"])
+                .first()
+            )
+            if not existing:
+                db.add(WageType(**wt_data))
+                print(f"Created wage type: {wt_data['name']}")
+
+        db.commit()
+        print("Wage types seeding complete.")
+    except Exception as e:
+        print(f"Error seeding wage types: {e}")
 
     # Seed default hectares-to-acres conversion rate
     from .models.settings import AppConfig

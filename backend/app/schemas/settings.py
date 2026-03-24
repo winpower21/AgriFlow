@@ -22,9 +22,11 @@ class WageTypeCreate(BaseModel):
     """Request body for creating a new wage type.
 
     Fields:
-        name: Label for the wage type (e.g. 'Daily', 'Piece-rate', 'Monthly').
+        name:               Label for the wage type (e.g. 'Daily', 'Piece-rate', 'Monthly').
+        calculation_method: How wages are calculated ('DAILY', 'PER_KG', 'MONTHLY').
     """
     name: str
+    calculation_method: str = "DAILY"
 
 
 class WageTypeUpdate(BaseModel):
@@ -33,17 +35,20 @@ class WageTypeUpdate(BaseModel):
     All fields are optional; only supplied fields are modified.
     """
     name: Optional[str] = None
+    calculation_method: Optional[str] = None
 
 
 class WageTypeSchema(BaseModel):
     """API response schema for a wage type record.
 
     Fields:
-        id:   Server-generated primary key.
-        name: Human-readable label for the wage type.
+        id:                 Server-generated primary key.
+        name:               Human-readable label for the wage type.
+        calculation_method: How wages are calculated ('DAILY', 'PER_KG', 'MONTHLY').
     """
     id: int
     name: str
+    calculation_method: str = "DAILY"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -68,6 +73,7 @@ class BatchStageCreate(BaseModel):
     sort_order: int = 0
     icon: str | None = None
     color: str | None = None
+    is_waste: bool = False
 
 
 class BatchStageUpdate(BaseModel):
@@ -79,6 +85,7 @@ class BatchStageUpdate(BaseModel):
     is_salable: Optional[bool] = None
     icon: str | None = None
     color: str | None = None
+    is_waste: Optional[bool] = None
 
 
 class BatchStageSchema(BaseModel):
@@ -102,6 +109,7 @@ class BatchStageSchema(BaseModel):
     batch_stage_level: int | None = None
     icon: str | None = None
     color: str | None = None
+    is_waste: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

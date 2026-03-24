@@ -63,6 +63,7 @@ class CostBreakdown(BaseModel):
     labor_cost: float
     consumable_cost: float
     vehicle_cost: float
+    expense_cost: float
 
 
 class TopCostContributor(BaseModel):

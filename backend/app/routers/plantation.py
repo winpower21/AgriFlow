@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..api.googleapi import get_current_weather, get_hourly_forecast, get_place_details
-from ..core.dependencies import get_current_user
+from ..core.dependencies import get_current_user, roles_required
 from ..crud.plantation import PlantationService
 from ..database import get_db
 from ..schemas.location import LocationDetailSchema, LocationSchema
@@ -75,13 +75,15 @@ def get_plantation(plantation_id: int, db: Session = Depends(get_db)):
     return ApiResponse(data=p)
 
 
-@router.post("/", response_model=ApiResponse[PlantationSchema], status_code=201)
+@router.post("/", response_model=ApiResponse[PlantationSchema], status_code=201,
+             dependencies=[Depends(roles_required("admin"))])
 def create_plantation(data: PlantationCreate, db: Session = Depends(get_db)):
     """Create a new plantation. Auth: any authenticated user."""
     return ApiResponse(data=PlantationService(db).create(data), message="Plantation created successfully", type="success")
 
 
-@router.put("/{plantation_id}", response_model=ApiResponse[PlantationSchema])
+@router.put("/{plantation_id}", response_model=ApiResponse[PlantationSchema],
+            dependencies=[Depends(roles_required("admin"))])
 def update_plantation(
     plantation_id: int, data: PlantationUpdate, db: Session = Depends(get_db)
 ):
@@ -94,7 +96,8 @@ def update_plantation(
     return ApiResponse(data=p, message="Plantation updated successfully", type="success")
 
 
-@router.delete("/{plantation_id}", response_model=ApiResponse[None])
+@router.delete("/{plantation_id}", response_model=ApiResponse[None],
+               dependencies=[Depends(roles_required("admin"))])
 def delete_plantation(
     plantation_id: int,
     force: bool = Query(False, description="Force delete even if lease history exists"),
@@ -127,7 +130,8 @@ def delete_check(plantation_id: int, db: Session = Depends(get_db)):
     return ApiResponse(data={"has_history": count > 0, "history_count": count})
 
 
-@router.post("/{plantation_id}/leases", response_model=ApiResponse[LeaseSchema], status_code=201)
+@router.post("/{plantation_id}/leases", response_model=ApiResponse[LeaseSchema], status_code=201,
+             dependencies=[Depends(roles_required("admin"))])
 def add_lease(
     plantation_id: int, data: LeaseAddRequest, db: Session = Depends(get_db)
 ):

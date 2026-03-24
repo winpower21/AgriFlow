@@ -14,7 +14,12 @@ class ApprovalItem(BaseModel):
 
 
 class ApprovalRequestCreate(BaseModel):
-    type: Literal["EXPENSE", "CONSUMABLE_PURCHASE"]
+    type: Literal["EXPENSE", "CONSUMABLE_PURCHASE", "TRANSFORMATION_COMPLETION", "PERSONNEL_PAYMENT", "TRANSFORMATION_EXPENSE"]
+    items: List[ApprovalItem]
+    notes: Optional[str] = None
+
+
+class ApprovalRequestUpdate(BaseModel):
     items: List[ApprovalItem]
     notes: Optional[str] = None
 
@@ -39,6 +44,7 @@ class ApprovalRequestSchema(BaseModel):
     requested_by: ApprovalRequestorSchema
     payload: List[ApprovalItem]       # deserialized
     reviewed_by_id: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
     notes: Optional[str] = None
     created_at: datetime
 

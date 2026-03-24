@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 
 if TYPE_CHECKING:
+    from .personnel import Personnel
     from .plantation import Plantation
     from .transformation import Transformation
     from .vehicle import Vehicle
@@ -49,6 +50,9 @@ class Expense(Base):
     transformation_id: Mapped[int | None] = mapped_column(
         ForeignKey("transformations.id", ondelete="SET NULL"), nullable=True
     )
+    personnel_id: Mapped[int | None] = mapped_column(
+        ForeignKey("personnel.id", ondelete="SET NULL"), nullable=True
+    )
 
     description: Mapped[str | None] = mapped_column(String(1000))
     receipt_image: Mapped[str | None] = mapped_column(String(500))  # Path to image
@@ -65,6 +69,7 @@ class Expense(Base):
     transformation: Mapped[Optional["Transformation"]] = relationship(
         "Transformation", back_populates="expenses"
     )
+    personnel: Mapped[Optional["Personnel"]] = relationship("Personnel")
 
     def __repr__(self) -> str:
         category_name = self.category.name if self.category else "Unknown"

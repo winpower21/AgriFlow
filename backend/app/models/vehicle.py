@@ -23,14 +23,14 @@ class Vehicle(Base):
 
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    fuel_consumable_id: Mapped[int | None] = mapped_column(
-        ForeignKey("consumables.id"), nullable=True
+    fuel_consumable_id: Mapped[int] = mapped_column(
+        ForeignKey("consumables.id")
     )
 
     usage: Mapped[List["TransformationVehicle"]] = relationship(
         back_populates="vehicle"
     )
-    fuel_consumable: Mapped[Optional["Consumable"]] = relationship("Consumable")
+    fuel_consumable: Mapped["Consumable"] = relationship("Consumable")
 
     def __repr__(self) -> str:
         return f"<Vehicle(id={self.id}, number='{self.number}')>"

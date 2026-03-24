@@ -23,6 +23,7 @@ class DashboardService:
 
     def get_summary(self) -> DashboardSummary:
         ParentStage = aliased(BatchStage)
+        current_year_start = datetime(datetime.now(timezone.utc).year, 1, 1, tzinfo=timezone.utc)
         stage_rows = (
             self.db.query(
                 BatchStage.id,
@@ -35,7 +36,13 @@ class DashboardService:
                 ),
             )
             .outerjoin(ParentStage, BatchStage.parent_id == ParentStage.id)
-            .outerjoin(Batch, Batch.stage_id == BatchStage.id)
+            .outerjoin(
+                Batch,
+                (Batch.stage_id == BatchStage.id)
+                & (Batch.is_depleted == False)  # noqa: E712
+                & (Batch.created_at >= current_year_start),
+            )
+            .filter(BatchStage.is_waste == False)  # noqa: E712
             .group_by(
                 BatchStage.id, BatchStage.name, BatchStage.icon, BatchStage.color,
                 BatchStage.sort_order, BatchStage.batch_stage_level,
@@ -70,7 +77,11 @@ class DashboardService:
 
         total_kg = (
             self.db.query(func.coalesce(func.sum(Batch.remaining_weight_kg), 0))
-            .filter(Batch.is_depleted == False)  # noqa: E712
+            .join(BatchStage, Batch.stage_id == BatchStage.id)
+            .filter(
+                Batch.is_depleted == False,  # noqa: E712
+                BatchStage.is_waste == False,  # noqa: E712
+            )
             .scalar()
         )
         total_kg = Decimal(str(total_kg))
@@ -81,7 +92,7 @@ class DashboardService:
             self.db.query(Transformation)
             .options(
                 joinedload(Transformation.inputs),
-                joinedload(Transformation.outputs),
+                joinedload(Transformation.outputs).joinedload(TransformationOutput.batch).joinedload(Batch.stage),
             )
             .filter(
                 Transformation.to_date.isnot(None),
@@ -95,7 +106,11 @@ class DashboardService:
             yields = []
             for t in recent:
                 total_in = sum((i.input_weight for i in t.inputs), Decimal("0"))
-                total_out = sum((o.output_weight for o in t.outputs), Decimal("0"))
+                total_out = sum(
+                    (o.output_weight for o in t.outputs
+                     if not (o.batch and o.batch.stage and o.batch.stage.is_waste)),
+                    Decimal("0")
+                )
                 if total_in > 0:
                     yields.append(total_out / total_in * 100)
             if yields:

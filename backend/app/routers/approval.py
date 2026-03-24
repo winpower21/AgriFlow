@@ -10,6 +10,7 @@ from ..schemas.approval import (
     ApprovalItemAction,
     ApprovalRequestCreate,
     ApprovalRequestSchema,
+    ApprovalRequestUpdate,
 )
 from ..schemas.response import ApiResponse
 
@@ -88,3 +89,41 @@ def reject_all(
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
     return ApiResponse(data=result, message="All items rejected", type="success")
+
+
+@router.put("/{request_id}", response_model=ApiResponse[ApprovalRequestSchema])
+def update_approval(
+    request_id: int,
+    body: ApprovalRequestUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    svc = ApprovalService(db)
+    try:
+        result = svc.update(request_id, current_user.id, body)
+    except ValueError as e:
+        if str(e) == "not_owner":
+            raise HTTPException(status_code=403, detail="You can only edit your own requests")
+        if str(e) == "not_pending":
+            raise HTTPException(status_code=409, detail="Only pending requests can be edited")
+        raise
+    if not result:
+        raise HTTPException(status_code=404, detail="Approval request not found")
+    return ApiResponse(data=result, message="Approval request updated", type="success")
+
+
+@router.delete("/{request_id}", response_model=ApiResponse[None])
+def delete_approval(
+    request_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    svc = ApprovalService(db)
+    result = svc.delete(request_id, current_user.id)
+    if result == "not_found":
+        raise HTTPException(status_code=404, detail="Approval request not found")
+    if result == "not_owner":
+        raise HTTPException(status_code=403, detail="You can only delete your own requests")
+    if result == "not_pending":
+        raise HTTPException(status_code=409, detail="Only pending requests can be deleted")
+    return ApiResponse(data=None, message="Approval request deleted", type="success")

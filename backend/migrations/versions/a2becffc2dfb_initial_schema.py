@@ -1,8 +1,8 @@
 """initial schema
 
-Revision ID: 8fa548e4f38c
-Revises: 
-Create Date: 2026-03-21 18:36:29.150642
+Revision ID: a2becffc2dfb
+Revises: 233418cebb17
+Create Date: 2026-03-24 14:20:53.924368
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '8fa548e4f38c'
-down_revision: Union[str, Sequence[str], None] = None
+revision: str = 'a2becffc2dfb'
+down_revision: Union[str, Sequence[str], None] = '233418cebb17'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -35,6 +35,7 @@ def upgrade() -> None:
     sa.Column('sort_order', sa.Integer(), server_default='0', nullable=False),
     sa.Column('icon', sa.String(length=50), nullable=True),
     sa.Column('color', sa.String(length=7), nullable=True),
+    sa.Column('is_waste', sa.Boolean(), server_default='false', nullable=False),
     sa.ForeignKeyConstraint(['parent_id'], ['batch_stages.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -99,6 +100,7 @@ def upgrade() -> None:
     op.create_table('wage_types',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=50), nullable=False),
+    sa.Column('calculation_method', sa.String(length=20), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('name')
     )
@@ -123,6 +125,7 @@ def upgrade() -> None:
     sa.Column('current_rate', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('phone', sa.String(length=20), nullable=True),
     sa.Column('address', sa.String(length=500), nullable=True),
+    sa.Column('salary_payment_date', sa.Integer(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
@@ -289,7 +292,7 @@ def upgrade() -> None:
     sa.Column('vehicle_type', sa.String(length=100), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-    sa.Column('fuel_consumable_id', sa.Integer(), nullable=True),
+    sa.Column('fuel_consumable_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['fuel_consumable_id'], ['consumables.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('number')
@@ -313,11 +316,13 @@ def upgrade() -> None:
     sa.Column('plantation_id', sa.Integer(), nullable=True),
     sa.Column('vehicle_id', sa.Integer(), nullable=True),
     sa.Column('transformation_id', sa.Integer(), nullable=True),
+    sa.Column('personnel_id', sa.Integer(), nullable=True),
     sa.Column('description', sa.String(length=1000), nullable=True),
     sa.Column('receipt_image', sa.String(length=500), nullable=True),
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['category_id'], ['expense_categories.id'], ),
+    sa.ForeignKeyConstraint(['personnel_id'], ['personnel.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['plantation_id'], ['plantations.id'], ),
     sa.ForeignKeyConstraint(['transformation_id'], ['transformations.id'], ondelete='SET NULL'),
     sa.ForeignKeyConstraint(['vehicle_id'], ['vehicles.id'], ),

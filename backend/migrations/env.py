@@ -1,25 +1,27 @@
+import os
+import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+# Allow Alembic to find your app package
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+# Import DB metadata
+# Import settings (Pydantic BaseSettings)
+from app.config import settings
+from app.models import Base
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-# Import app settings to get DATABASE_URL, and all models so that
-# Base.metadata is populated for autogenerate support.
-from app.config import settings  # noqa: E402
-from app.database import Base  # noqa: E402
-from app.models import *  # noqa: E402, F401, F403
-
-# Override sqlalchemy.url with the app's DATABASE_URL from .env
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
